@@ -24,7 +24,6 @@ const aliases = {
   'Galilee & Golan Heights':'Golan Heights Israel', 'Commandaria & Troodos':'Troodos Cyprus',
 }
 
-const results = []
 for (const entry of selected) {
   const q = aliases[entry.name] ?? `${entry.name} wine region, ${entry.country}`
   const url = new URL('https://nominatim.openstreetmap.org/search')
@@ -35,7 +34,13 @@ for (const entry of selected) {
   const response = await fetch(url, { headers: { 'User-Agent': 'VineAtlas-coordinate-audit/1.0 (educational webapp)' } })
   if (!response.ok) throw new Error(`Geocoder ${response.status} for ${entry.name}`)
   const [place] = await response.json()
-  results.push({ ...entry, lat: place ? Number(place.lat) : null, lng: place ? Number(place.lon) : null, label: place?.display_name ?? null })
+  const result = {
+    ...entry,
+    lat: place ? Number(place.lat) : null,
+    lng: place ? Number(place.lon) : null,
+    label: place?.display_name ?? null,
+    countryCode: place?.address?.country_code?.toUpperCase() ?? null,
+  }
+  process.stdout.write(`${JSON.stringify(result)}\n`)
   await new Promise((resolve) => setTimeout(resolve, 1100))
 }
-process.stdout.write(JSON.stringify(results))

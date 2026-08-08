@@ -13,6 +13,14 @@ export interface Region {
   producerIds: string[]
   wineIds: string[]
   sourceUrl: string
+  history: string
+  growingSeason: string
+  viticulture: string
+  wineStyles: string[]
+  subregions: string[]
+  pairings: string[]
+  keyFacts: string[]
+  sources: { label: string; url: string }[]
   featured?: boolean
 }
 
@@ -27,17 +35,30 @@ export interface Grape {
   body: number
   aromaIds: string[]
   regionIds: string[]
+  origin: string
+  ripening: string
+  climateFit: string
+  viticulture: string
+  winemaking: string
+  styles: string[]
+  pairings: string[]
 }
 
 export interface Producer {
   id: string
   name: string
   regionId: string
+  regionIds: string[]
   summary: string
   lat: number
   lng: number
   wineIds: string[]
   communityRating: number
+  philosophy: string
+  vineyard: string
+  cellar: string
+  speciality: string
+  sourceUrl: string
 }
 
 export interface Wine {
@@ -52,6 +73,13 @@ export interface Wine {
   aromaIds: string[]
   serving: string
   communityRating: number
+  composition: string
+  vinification: string
+  maturation: string
+  drinkWindow: string
+  pairings: string[]
+  sourceUrl: string
+  merchantOffers: { merchant: string; url: string; market: string }[]
 }
 
 export interface Aroma {
@@ -62,6 +90,9 @@ export interface Aroma {
   origin: string
   styles: WineStyle[]
   grapeIds: string[]
+  subfamily: string
+  tier: 'primary' | 'secondary' | 'tertiary'
+  intensity: [string, string, string]
 }
 
 export interface Article {
@@ -71,6 +102,12 @@ export interface Article {
   minutes: number
   summary: string
   body: string[]
+  objectives: string[]
+  example: string
+  exercise: string
+  relatedRegionIds: string[]
+  relatedGrapeIds: string[]
+  image: 'terroir' | 'winemaking' | 'aroma' | 'tasting'
 }
 
 export interface CellarItem {
@@ -84,6 +121,28 @@ export interface CellarItem {
   quantity: number
   location: string
   rating?: number
+  imageDataUrl?: string
+}
+
+export type TastingChapterType = 'wine' | 'region' | 'producer' | 'grape' | 'aroma' | 'article' | 'host-note' | 'pause'
+
+export interface TastingChapter {
+  id: string
+  type: TastingChapterType
+  referenceId?: string
+  title: string
+  hostNote?: string
+  duration: number
+}
+
+export interface TastingJourney {
+  id: string
+  title: string
+  description: string
+  pace: 'host' | 'self'
+  access: 'private' | 'invite' | 'open'
+  chapters: TastingChapter[]
+  updatedAt: string
 }
 
 export interface TastingNote {

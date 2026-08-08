@@ -27,14 +27,19 @@ import {
   ArrowRight,
   BookOpen,
   Check,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleUserRound,
   Compass,
   Filter,
   Grape,
+  GripVertical,
   Heart,
   Library,
   Languages,
+  ImagePlus,
+  Layers3,
   ListFilter,
   LockKeyhole,
   Map as MapIcon,
@@ -48,6 +53,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Trash2,
   Users,
   Wine,
   X,
@@ -63,11 +69,17 @@ import {
   wines,
 } from "./data/catalog";
 import { repository } from "./data/repository";
-import { localeRegistry, useLocale, usePageCopy } from "./i18n";
+import { prepareBottlePhoto } from "./lib/image";
+import { localeRegistry, useLocale, usePageCopy, type Locale } from "./i18n";
+import { aromaContent, articleContent, countryLabel, grapeContent, producerContent, regionContent, styleLabel, wineContent } from "./localizedContent";
+import { useUiCopy } from "./uiCopy";
 import { useAuth } from "./auth";
-import type { Aroma, CellarItem, TastingNote, WineStyle } from "./types";
+import type { Aroma, CellarItem, TastingChapter, TastingChapterType, TastingJourney, TastingNote, WineStyle } from "./types";
 import vineyardHero from "./assets/vineyard-terraces.png";
 import tastingStill from "./assets/tasting-still-life.png";
+import terroirIllustration from "./assets/terroir-cross-section.png";
+import aromaReference from "./assets/aroma-reference-table.png";
+import winemakingJourney from "./assets/winemaking-journey.png";
 
 const navItems = [
   { to: "/", key: "home" as const, icon: Compass, end: true },
@@ -92,6 +104,7 @@ export default function App() {
         <Route path="/learn" element={<LearnPage />} />
         <Route path="/learn/:slug" element={<ArticlePage />} />
         <Route path="/tastings" element={<TastingsPage />} />
+        <Route path="/tastings/build" element={<TastingBuilder />} />
         <Route path="/tastings/:id" element={<TastingRoom />} />
         <Route path="/cellar" element={<CellarPage />} />
         <Route path="/admin" element={<AdminPage />} />
@@ -111,6 +124,7 @@ function AppShell({
   onSearch: () => void;
 }) {
   const { t, locale, setLocale } = useLocale();
+  const ui=useUiCopy()
   const location = useLocation();
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -118,7 +132,7 @@ function AppShell({
   return (
     <div className="app-shell">
       <aside className="rail">
-        <Link to="/" className="brand" aria-label="Vine Atlas home">
+        <Link to="/" className="brand" aria-label={`Vine Atlas · ${ui.homeLabel}`}>
           <span className="brand-mark">
             <Grape size={22} />
           </span>
@@ -127,7 +141,7 @@ function AppShell({
             <em>Atlas</em>
           </span>
         </Link>
-        <nav aria-label="Primary">
+        <nav aria-label={ui.primaryNavigation}>
           {navItems.map(({ to, key, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end}>
               <Icon size={20} />
@@ -159,11 +173,7 @@ function AppShell({
             <span>{t("search")}</span>
           </button>
         </div>
-        <p className="rail-signature">
-          Follow the thread
-          <br />
-          of terroir
-        </p>
+        <p className="rail-signature">{ui.followTerroir}</p>
       </aside>
       <header className="topbar">
         <Link to="/" className="mobile-brand">
@@ -186,7 +196,7 @@ function AppShell({
         </div>
       </header>
       <main className="main-content">{children}</main>
-      <nav className="bottom-nav" aria-label="Primary">
+      <nav className="bottom-nav" aria-label={ui.primaryNavigation}>
         {navItems.map(({ to, key, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end}>
             <Icon size={21} />
@@ -270,7 +280,8 @@ function Stars({
 }
 
 function HomePage() {
-  const { t } = useLocale();
+  const { t,locale } = useLocale();
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const cellar = repository.cellar.all();
   const featured = regions.filter((r) => r.featured).slice(0, 4);
@@ -279,7 +290,7 @@ function HomePage() {
       <section className="hero">
         <img
           src={vineyardHero}
-          alt="Terraced vineyards following a river valley at first light"
+          alt={ui.vineyardHeroAlt}
         />
         <div className="hero-shade" />
         <div className="hero-copy">
@@ -327,13 +338,13 @@ function HomePage() {
               key={region.id}
             >
               <div className={`region-image crop-${index}`}>
-                <img src={vineyardHero} alt="Vineyard landscape" />
+                <img src={vineyardHero} alt={ui.vineyardLandscapeAlt} />
                 <span>{String(index + 1).padStart(2, "0")}</span>
               </div>
               <div>
-                <small>{region.country}</small>
+                <small>{countryLabel(region.country,locale)}</small>
                 <h3>{region.name}</h3>
-                <p>{region.climate}</p>
+                <p>{regionContent(region,locale).climate}</p>
               </div>
             </Link>
           ))}
@@ -428,17 +439,35 @@ function MiniWheel() {
 }
 
 function AtlasPage() {
-  const { t } = useLocale();
+  const { t,locale } = useLocale();
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const [selected, setSelected] = useState(
     regions.find((r) => r.id === "mosel") ?? regions[0],
   );
   const [query, setQuery] = useState("");
   const [layer, setLayer] = useState<"regions" | "producers">("regions");
+  const [country,setCountry]=useState('all')
+  const [grapeId,setGrapeId]=useState('all')
+  const [linkedOnly,setLinkedOnly]=useState(false)
+  const [sort,setSort]=useState<'name'|'country'|'links'>('name')
   const [zoom, setZoom] = useState(3);
-  const filtered = regions.filter((r) =>
-    `${r.name} ${r.country}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const countries=[...new Set(regions.map(region=>region.country))].sort()
+  const q=query.trim().toLowerCase()
+  const matchesRegion=(region:(typeof regions)[number])=>{
+    const grapeNames=grapes.filter(grape=>region.grapeIds.includes(grape.id)).map(grape=>grape.name).join(' ')
+    const producerNames=producers.filter(producer=>producer.regionId===region.id).map(producer=>producer.name).join(' ')
+    return (!q||`${region.name} ${region.country} ${grapeNames} ${producerNames}`.toLowerCase().includes(q))&&(country==='all'||region.country===country)&&(grapeId==='all'||region.grapeIds.includes(grapeId))&&(!linkedOnly||(region.wineIds.length+region.producerIds.length)>0)
+  }
+  const filteredRegions=regions.filter(matchesRegion).sort((a,b)=>sort==='country'?`${a.country}${a.name}`.localeCompare(`${b.country}${b.name}`):sort==='links'?(b.producerIds.length+b.wineIds.length)-(a.producerIds.length+a.wineIds.length):a.name.localeCompare(b.name))
+  const filteredProducers=producers.filter(producer=>{
+    const region=regions.find(item=>item.id===producer.regionId)!
+    const grapeNames=grapes.filter(grape=>region.grapeIds.includes(grape.id)).map(grape=>grape.name).join(' ')
+    return (!q||`${producer.name} ${region.name} ${region.country} ${grapeNames}`.toLowerCase().includes(q))&&(country==='all'||region.country===country)&&(grapeId==='all'||region.grapeIds.includes(grapeId))&&(!linkedOnly||producer.wineIds.length>0)
+  }).sort((a,b)=>{const ar=regions.find(item=>item.id===a.regionId)!,br=regions.find(item=>item.id===b.regionId)!;return sort==='country'?`${ar.country}${a.name}`.localeCompare(`${br.country}${b.name}`):sort==='links'?b.wineIds.length-a.wineIds.length:a.name.localeCompare(b.name)})
+  const producerGroups=filteredRegions.map(region=>({region,items:filteredProducers.filter(producer=>producer.regionId===region.id)})).filter(group=>group.items.length)
+  const resultCount=layer==='regions'?filteredRegions.length:filteredProducers.length
+  const selectedContent=regionContent(selected,locale)
   return (
     <div className="page atlas-page">
       <PageIntro eyebrow={copy.atlasEyebrow} title={copy.atlasTitle}>
@@ -450,7 +479,7 @@ function AtlasPage() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={copy.atlasSearch}
+            placeholder={ui.searchAll}
           />
         </label>
         <div className="segmented">
@@ -470,6 +499,13 @@ function AtlasPage() {
           </button>
         </div>
       </div>
+      <div className="atlas-filters">
+        <label><span>{ui.country}</span><select value={country} onChange={event=>setCountry(event.target.value)}><option value="all">{ui.allCountries}</option>{countries.map(item=><option value={item} key={item}>{countryLabel(item,locale)}</option>)}</select></label>
+        <label><span>{ui.variety}</span><select value={grapeId} onChange={event=>setGrapeId(event.target.value)}><option value="all">{ui.allVarieties}</option>{grapes.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(grape=><option value={grape.id} key={grape.id}>{grape.name}</option>)}</select></label>
+        <label><span>{ui.sort}</span><select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="name">{ui.sortName}</option><option value="country">{ui.sortCountry}</option><option value="links">{ui.sortLinks}</option></select></label>
+        <button className={linkedOnly?'active':''} onClick={()=>setLinkedOnly(value=>!value)}><Check size={15}/>{ui.linkedOnly}</button>
+        {(q||country!=='all'||grapeId!=='all'||linkedOnly)&&<button className="clear-filters" onClick={()=>{setQuery('');setCountry('all');setGrapeId('all');setLinkedOnly(false)}}><X size={15}/>{ui.clearFilters}</button>}
+      </div>
       <section className="map-shell">
         <div className="atlas-map">
           <MapContainer
@@ -485,7 +521,7 @@ function AtlasPage() {
             />
             <ZoomWatcher onZoom={setZoom} />
             {layer === "regions" &&
-              filtered.map((region) => (
+              filteredRegions.map((region) => (
                 <CircleMarker
                   key={region.id}
                   center={[region.lat, region.lng]}
@@ -502,26 +538,28 @@ function AtlasPage() {
                   <Popup>
                     <strong>{region.name}</strong>
                     <br />
-                    {region.country}
+                    {countryLabel(region.country,locale)}
                   </Popup>
                 </CircleMarker>
               ))}
             {layer === "producers" &&
-              zoom >= 4 &&
-              producers.map((producer) => (
+              producerGroups.map(({region,items}) => (
                 <CircleMarker
-                  key={producer.id}
-                  center={[producer.lat, producer.lng]}
-                  radius={5}
+                  key={region.id}
+                  center={[region.lat, region.lng]}
+                  radius={Math.min(11,5+items.length)}
                   pathOptions={{
                     color: "#f4efe6",
                     fillColor: "#3f5239",
                     fillOpacity: 0.95,
                     weight: 2,
                   }}
+                  eventHandlers={{click:()=>setSelected(region)}}
                 >
                   <Popup>
-                    <Link to={`/wineries/${producer.id}`}>{producer.name}</Link>
+                    <strong>{region.name} · {items.length} {ui.wineries}</strong><br/>
+                    <small>{ui.regionalLocation}</small>
+                    <div className="popup-links">{items.slice(0,8).map(producer=><Link key={producer.id} to={`/wineries/${producer.id}`}>{producer.name}</Link>)}</div>
                   </Popup>
                 </CircleMarker>
               ))}
@@ -530,19 +568,19 @@ function AtlasPage() {
         <aside className="map-inspector">
           <span className="eyebrow">{copy.selectedPlace}</span>
           <h2>{selected.name}</h2>
-          <p>{selected.summary}</p>
+          <p>{selectedContent.summary}</p>
           <dl>
             <div>
-              <dt>Country</dt>
-              <dd>{selected.country}</dd>
+              <dt>{ui.country}</dt>
+              <dd>{countryLabel(selected.country,locale)}</dd>
             </div>
             <div>
-              <dt>Climate</dt>
-              <dd>{selected.climate}</dd>
+              <dt>{ui.climate}</dt>
+              <dd>{selectedContent.climate}</dd>
             </div>
             <div>
-              <dt>Ground</dt>
-              <dd>{selected.soil}</dd>
+              <dt>{ui.ground}</dt>
+              <dd>{selectedContent.soil}</dd>
             </div>
           </dl>
           <ThreadLink to={`/regions/${selected.id}`}>
@@ -551,9 +589,9 @@ function AtlasPage() {
         </aside>
         <div className="mobile-map-sheet">
           <i />
-          <span>{selected.country}</span>
+          <span>{countryLabel(selected.country,locale)}</span>
           <h2>{selected.name}</h2>
-          <p>{selected.climate}</p>
+          <p>{selectedContent.climate}</p>
           <ThreadLink to={`/regions/${selected.id}`}>
             {copy.enterRegion}
           </ThreadLink>
@@ -561,18 +599,16 @@ function AtlasPage() {
       </section>
       <section className="atlas-index">
         <div className="section-heading">
-          <h2>{filtered.length} {copy.placesInView}</h2>
-          <span>Zoom {zoom}</span>
+          <div><span className="eyebrow">{ui.completeDirectory}</span><h2 aria-live="polite">{resultCount} {layer==='regions'?ui.wineRegions:ui.wineries}</h2></div>
+          <span>Map · {zoom} · {ui.mapShowing}</span>
         </div>
-        <div className="compact-grid">
-          {filtered.slice(0, 18).map((r) => (
-            <Link to={`/regions/${r.id}`} key={r.id}>
-              <small>{r.country}</small>
-              <strong>{r.name}</strong>
-              <ChevronRight size={16} />
-            </Link>
-          ))}
-        </div>
+        {resultCount===0?<div className="directory-empty"><Search/><h3>{ui.noPath}</h3><p>{ui.noPathHelp}</p></div>:<div className="atlas-directory">
+          {layer==='regions'?filteredRegions.map(region=><Link to={`/regions/${region.id}`} key={region.id}>
+            <div className="directory-index">{String(regions.indexOf(region)+1).padStart(3,'0')}</div><div><small>{countryLabel(region.country,locale)}</small><h3>{region.name}</h3><p>{regionContent(region,locale).climate}</p></div><dl><span>{region.grapeIds.length} {ui.linkedVarieties}</span><span>{region.producerIds.length} {ui.linkedWineries}</span></dl><ChevronRight/>
+          </Link>):filteredProducers.map(producer=>{const region=regions.find(item=>item.id===producer.regionId)!,pc=producerContent(producer,region,locale);return <Link to={`/wineries/${producer.id}`} key={producer.id}>
+            <div className="directory-monogram">{producer.name.charAt(0)}</div><div><small>{countryLabel(region.country,locale)} · {region.name}</small><h3>{producer.name}</h3><p>{pc.speciality}</p></div><dl><span>{producer.wineIds.length} {ui.linkedWines}</span><span>{producer.communityRating.toFixed(1)} {ui.communityShort}</span></dl><ChevronRight/>
+          </Link>})}
+        </div>}
       </section>
     </div>
   );
@@ -583,6 +619,8 @@ function ZoomWatcher({ onZoom }: { onZoom: (zoom: number) => void }) {
 }
 
 function RegionPage() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { slug } = useParams();
   const region = regions.find((r) => r.id === slug);
   const [rating, setRating] = useRating(`region:${slug}`);
@@ -590,84 +628,115 @@ function RegionPage() {
   const relatedGrapes = grapes.filter((g) => region.grapeIds.includes(g.id));
   const relatedProducers = producers.filter((p) => p.regionId === region.id);
   const relatedWines = wines.filter((w) => w.regionId === region.id);
+  const content=regionContent(region,locale)
   return (
     <article className="page detail-page">
-      <BackLink to="/atlas" label="World atlas" />
+      <BackLink to="/atlas" label={ui.worldAtlas} />
       <section className="detail-hero">
         <img
           src={vineyardHero}
           alt={`Vineyard landscape introducing ${region.name}`}
         />
         <div className="detail-hero-copy">
-          <span>{region.country}</span>
+          <span>{countryLabel(region.country,locale)}</span>
           <h1>{region.name}</h1>
-          <p>{region.summary}</p>
+          <p>{content.summary}</p>
         </div>
         <div className="place-index">
-          <span>Place index</span>
+          <span>{ui.placeIndex}</span>
           <strong>
             {String(regions.indexOf(region) + 1).padStart(3, "0")}
           </strong>
         </div>
       </section>
       <div className="thread-path">
-        <span>Place</span>
+        <span>{ui.place}</span>
         <i />
-        <span>Grape</span>
+        <span>{ui.grape}</span>
         <i />
-        <span>Producer</span>
+        <span>{ui.producer}</span>
         <i />
-        <span>Wine</span>
+        <span>{ui.wine}</span>
         <i />
-        <span>Memory</span>
+        <span>{ui.memory}</span>
       </div>
       <section className="detail-layout">
         <div>
-          <span className="eyebrow">The shape of the place</span>
-          <h2>Climate meets ground</h2>
+          <span className="eyebrow">{ui.shapePlace}</span>
+          <h2>{ui.climateMeets}</h2>
           <p className="lead">
-            {region.climate}. Beneath the vines, {region.soil.toLowerCase()}{" "}
+            {content.climate}. Beneath the vines, {content.soil.toLowerCase()}{" "}
             helps frame the region’s physical story.
           </p>
           <p>
-            Wine from {region.name} is never a single fixed taste. Variety,
-            aspect, vintage and the hand of the grower all shift the result;
-            these links are invitations to compare.
+            {ui.regionDiversity}
           </p>
         </div>
         <dl className="facts">
           <div>
-            <dt>Latitude</dt>
+            <dt>{ui.latitude}</dt>
             <dd>
               {Math.abs(region.lat).toFixed(1)}°{region.lat >= 0 ? "N" : "S"}
             </dd>
           </div>
           <div>
-            <dt>Typical ground</dt>
-            <dd>{region.soil}</dd>
+            <dt>{ui.typicalGround}</dt>
+            <dd>{content.soil}</dd>
           </div>
           <div>
-            <dt>Producers linked</dt>
+            <dt>{ui.producersLinked}</dt>
             <dd>{relatedProducers.length}</dd>
           </div>
           <div>
-            <dt>Community</dt>
+            <dt>{ui.community}</dt>
             <dd>
               <Stars value={4} />
-              <small>Community snapshot · 268 ratings</small>
+              <small>{ui.communitySnapshot} · 268</small>
             </dd>
           </div>
           <div>
-            <dt>Your rating</dt>
+            <dt>{ui.yourRating}</dt>
             <dd>
               <Stars value={rating} onChange={setRating} />
             </dd>
           </div>
         </dl>
       </section>
+      <section className="terroir-story">
+        <div className="story-visual">
+          <img src={terroirIllustration} alt={`Illustrated vineyard slope, roots and soil layers for understanding ${region.name}`} />
+          <span className="image-caption">{ui.readSkyRoot}</span>
+        </div>
+        <div className="story-copy">
+          <span className="eyebrow">{ui.historySeason}</span>
+          <h2>{ui.livingSystem}</h2>
+          <div className="story-chapters">
+            <article><span>01</span><div><h3>{ui.placeEvolved}</h3><p>{content.history}</p></div></article>
+            <article><span>02</span><div><h3>{ui.throughSeason}</h3><p>{content.growingSeason}</p></div></article>
+            <article><span>03</span><div><h3>{ui.vineDecisions}</h3><p>{content.viticulture}</p></div></article>
+          </div>
+        </div>
+      </section>
+      <section className="knowledge-panels">
+        <article>
+          <span className="eyebrow">{ui.stylesCompare}</span>
+          <h3>{ui.regionBecome}</h3>
+          <ul>{content.styles.map((style) => <li key={style}>{style}</li>)}</ul>
+        </article>
+        <article>
+          <span className="eyebrow">{ui.localGeography}</span>
+          <h3>{region.subregions.length ? ui.namedZones : ui.readLandscape}</h3>
+          <ul>{(region.subregions.length ? region.subregions : content.keyFacts).map((zone) => <li key={zone}>{zone}</li>)}</ul>
+        </article>
+        <article>
+          <span className="eyebrow">{ui.atTable}</span>
+          <h3>{ui.pairPlace}</h3>
+          <ul>{content.pairings.map((pairing) => <li key={pairing}>{pairing}</li>)}</ul>
+        </article>
+      </section>
       <section className="related-section">
-        <span className="eyebrow">Signature threads</span>
-        <h2>Start with the varieties</h2>
+        <span className="eyebrow">{ui.signatureThreads}</span>
+        <h2>{ui.startVarieties}</h2>
         <div className="thread-cloud">
           {relatedGrapes.map((g) => (
             <ThreadLink key={g.id} to={`/grapes/${g.id}`} tone="moss">
@@ -680,8 +749,8 @@ function RegionPage() {
         <section className="related-section">
           <div className="section-heading">
             <div>
-              <span className="eyebrow">People of the place</span>
-              <h2>Producers to know</h2>
+              <span className="eyebrow">{ui.peoplePlace}</span>
+              <h2>{ui.producersKnow}</h2>
             </div>
           </div>
           <div className="editorial-list">
@@ -700,8 +769,8 @@ function RegionPage() {
       )}
       {relatedWines.length > 0 && (
         <section className="related-section">
-          <span className="eyebrow">Continue into the glass</span>
-          <h2>Representative wines</h2>
+          <span className="eyebrow">{ui.continueGlass}</span>
+          <h2>{ui.representativeWines}</h2>
           <div className="wine-shelf">
             {relatedWines.slice(0, 4).map((w) => (
               <WineCard key={w.id} wine={w} />
@@ -712,20 +781,22 @@ function RegionPage() {
       <section className="source-note">
         <ShieldCheck size={18} />
         <p>
-          <strong>Editorial provenance</strong>
+          <strong>{ui.editorialProvenance}</strong>
           <br />
-          Regional context is reviewed against authoritative trade and
-          appellation sources. Coordinates are educational approximations.
+          {ui.provenanceBody}
         </p>
         <a href={region.sourceUrl} target="_blank" rel="noreferrer">
-          View source
+          {ui.viewSource}
         </a>
+        <div className="source-links">{region.sources.slice(1).map(source=><a key={source.url} href={source.url} target="_blank" rel="noreferrer">{source.label}</a>)}</div>
       </section>
     </article>
   );
 }
 
 function GrapePage() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { slug } = useParams();
   const grape = grapes.find((g) => g.id === slug);
   if (!grape) return <NotFound />;
@@ -736,19 +807,20 @@ function GrapePage() {
   const relatedWines = wines
     .filter((w) => w.grapeIds.includes(grape.id))
     .slice(0, 4);
+  const content=grapeContent(grape,locale)
   return (
     <article className="page detail-page grape-page">
       <BackLink to="/atlas" label="Atlas" />
       <PageIntro
         eyebrow={
           grape.color === "red"
-            ? "Dark-skinned variety"
-            : "Light-skinned variety"
+            ? ui.darkVariety
+            : ui.lightVariety
         }
         title={grape.name}
       >
         {grape.aliases.length > 0 && (
-          <p>Also known as {grape.aliases.join(" and ")}</p>
+          <p>{ui.alsoKnown} {grape.aliases.join(` ${ui.and} `)}</p>
         )}
       </PageIntro>
       <section className="grape-intro">
@@ -756,37 +828,51 @@ function GrapePage() {
           <span>{grape.name.charAt(0)}</span>
           {grapeAromas.slice(0, 6).map((a, i) => (
             <i key={a.id} style={{ "--i": i } as React.CSSProperties}>
-              {a.name}
+              {aromaContent(a,locale).name}
             </i>
           ))}
         </div>
         <div>
-          <p className="lead">{grape.summary}</p>
-          <StructureScale label="Acidity" value={grape.acidity} />
-          <StructureScale label="Tannin" value={grape.tannin} />
-          <StructureScale label="Body" value={grape.body} />
+          <p className="lead">{content.summary}</p>
+          <StructureScale label={ui.acidity} value={grape.acidity} />
+          <StructureScale label={ui.tannin} value={grape.tannin} />
+          <StructureScale label={ui.body} value={grape.body} />
         </div>
       </section>
+      <section className="entity-deep-dive">
+        <div className="deep-dive-lead">
+          <span className="eyebrow">{ui.nurseryCellar}</span>
+          <h2>{ui.grapeBehaves}: {grape.name}</h2>
+          <p>{ui.originStart}</p>
+        </div>
+        <div className="deep-dive-grid">
+          <article><span>{ui.origin}</span><h3>{content.origin}</h3><p>{content.ripening}</p></article>
+          <article><span>{ui.climateFit}</span><h3>{ui.balancePossible}</h3><p>{content.climateFit}</p></article>
+          <article><span>{ui.inVineyard}</span><h3>{ui.growerDecisions}</h3><p>{content.viticulture}</p></article>
+          <article><span>{ui.inCellar}</span><h3>{ui.textureExpression}</h3><p>{content.winemaking}</p></article>
+        </div>
+      </section>
+      <section className="knowledge-panels">
+        <article><span className="eyebrow">{ui.styleRange}</span><h3>{ui.lookExpressions}</h3><ul>{content.styles.map(item=><li key={item}>{item}</li>)}</ul></article>
+        <article><span className="eyebrow">{ui.atTable}</span><h3>{ui.pairStructure}</h3><ul>{content.pairings.map(item=><li key={item}>{item}</li>)}</ul></article>
+      </section>
       <section className="related-section">
-        <span className="eyebrow">Aroma constellation</span>
-        <h2>Common points of reference</h2>
-        <p>
-          These are useful prompts, never promises. Climate and making can move
-          the glass in another direction.
-        </p>
+        <span className="eyebrow">{ui.aromaConstellation}</span>
+        <h2>{ui.commonReferences}</h2>
+        <p>{ui.aromaPrompts}</p>
         <div className="aroma-tiles">
           {grapeAromas.map((a) => (
             <Link to={`/aromas?selected=${a.id}`} key={a.id}>
-              <small>{a.family}</small>
-              <strong>{a.name}</strong>
-              <span>{a.reference}</span>
+              <small>{aromaContent(a,locale).family}</small>
+              <strong>{aromaContent(a,locale).name}</strong>
+              <span>{aromaContent(a,locale).reference}</span>
             </Link>
           ))}
         </div>
       </section>
       <section className="related-section">
-        <span className="eyebrow">Classic places</span>
-        <h2>See the grape through geography</h2>
+        <span className="eyebrow">{ui.classicPlaces}</span>
+        <h2>{ui.grapeGeography}</h2>
         <div className="thread-cloud">
           {relatedRegions.map((r) => (
               <ThreadLink key={r.id} to={`/regions/${r.id}`} tone="moss">
@@ -797,7 +883,7 @@ function GrapePage() {
       </section>
       {relatedWines.length > 0 && (
         <section className="related-section">
-          <h2>Continue into a bottle</h2>
+          <h2>{ui.continueBottle}</h2>
           <div className="wine-shelf">
             {relatedWines.map((w) => (
               <WineCard key={w.id} wine={w} />
@@ -809,6 +895,7 @@ function GrapePage() {
   );
 }
 function StructureScale({ label, value }: { label: string; value: number }) {
+  const ui=useUiCopy()
   return (
     <div className="structure-scale">
       <span>{label}</span>
@@ -817,76 +904,81 @@ function StructureScale({ label, value }: { label: string; value: number }) {
           <i className={n <= value ? "on" : ""} key={n} />
         ))}
       </div>
-      <b>{["", "Light", "Gentle", "Balanced", "Firm", "Pronounced"][value]}</b>
+      <b>{["", ui.levelLight, ui.levelGentle, ui.levelBalanced, ui.levelFirm, ui.levelPronounced][value]}</b>
     </div>
   );
 }
 
 function ProducerPage() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { slug } = useParams();
   const producer = producers.find((p) => p.id === slug);
   if (!producer) return <NotFound />;
   const region = regions.find((r) => r.id === producer.regionId)!;
   const producerWines = wines.filter((w) => w.producerId === producer.id);
   const [rating, setRating] = useRating(`producer:${slug}`);
+  const content=producerContent(producer,region,locale)
   return (
     <article className="page detail-page">
       <BackLink to={`/regions/${region.id}`} label={region.name} />
       <section className="producer-hero">
         <div>
-          <span className="eyebrow">Producer · {region.country}</span>
+          <span className="eyebrow">{ui.producer} · {countryLabel(region.country,locale)}</span>
           <h1>{producer.name}</h1>
-          <p>{producer.summary}</p>
+          <p>{content.summary}</p>
           <ThreadLink to={`/regions/${region.id}`} tone="moss">
             {region.name}
           </ThreadLink>
         </div>
         <img
           src={tastingStill}
-          alt="A quiet cellar tasting table with an unlabeled bottle and glasses"
+          alt={ui.producerHeroAlt}
         />
       </section>
       <section className="detail-layout">
         <div>
-          <span className="eyebrow">A point of view</span>
-          <h2>Tradition, read in the present tense</h2>
-          <p className="lead">
-            The most useful way to understand {producer.name} is alongside the
-            place: weather, soils, varieties and choices in the cellar.
-          </p>
-          <p>
-            This profile is an educational starting point. Follow the wines,
-            then return to {region.name} to compare neighbouring voices.
-          </p>
+          <span className="eyebrow">{ui.pointView}</span>
+          <h2>{ui.traditionPresent}</h2>
+          <p className="lead">{ui.producerContext}</p>
         </div>
         <dl className="facts">
           <div>
-            <dt>Home</dt>
+            <dt>{ui.homeLabel}</dt>
             <dd>
               {region.name}, {region.country}
             </dd>
           </div>
           <div>
-            <dt>Community</dt>
+            <dt>{ui.community}</dt>
             <dd>
               <Stars value={Math.round(producer.communityRating)} />
-              <small>Community snapshot · {producer.communityRating}</small>
+              <small>{ui.communitySnapshot} · {producer.communityRating}</small>
             </dd>
           </div>
           <div>
-            <dt>Your rating</dt>
+            <dt>{ui.yourRating}</dt>
             <dd>
               <Stars value={rating} onChange={setRating} />
             </dd>
           </div>
         </dl>
       </section>
+      <section className="producer-method">
+        <header><span className="eyebrow">{ui.estateLens}</span><h2>{ui.vineyardCellarSignature}</h2><p>{content.philosophy}</p></header>
+        <div>
+          <article><span>01</span><h3>{ui.vineyard}</h3><p>{content.vineyard}</p></article>
+          <article><span>02</span><h3>{ui.cellarLabel}</h3><p>{content.cellar}</p></article>
+          <article><span>03</span><h3>{ui.signature}</h3><p>{content.speciality}</p></article>
+        </div>
+        <a href={producer.sourceUrl} target="_blank" rel="noreferrer" className="text-link">{ui.visitPrimary} <ArrowRight size={15}/></a>
+      </section>
       <section className="related-section">
-        <span className="eyebrow">From this cellar</span>
+        <span className="eyebrow">{ui.fromCellar}</span>
         <h2>
           {producerWines.length
-            ? "Wines in the atlas"
-            : "The regional thread continues"}
+            ? ui.winesAtlas
+            : ui.regionalThread}
         </h2>
         {producerWines.length ? (
           <div className="wine-shelf">
@@ -895,10 +987,7 @@ function ProducerPage() {
             ))}
           </div>
         ) : (
-          <p className="soft-copy">
-            This producer’s individual wines are still being expanded. The
-            region profile offers the clearest next path.
-          </p>
+          <p className="soft-copy">{ui.producerExpansion}</p>
         )}
       </section>
     </article>
@@ -906,6 +995,8 @@ function ProducerPage() {
 }
 
 function WineCard({ wine }: { wine: (typeof wines)[number] }) {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const producer = producers.find((p) => p.id === wine.producerId);
   return (
     <Link to={`/wines/${wine.id}`} className={`wine-card style-${wine.style}`}>
@@ -913,18 +1004,20 @@ function WineCard({ wine }: { wine: (typeof wines)[number] }) {
         <i />
       </div>
       <small>
-        {wine.vintage ?? "NV"} · {wine.style}
+        {wine.vintage ?? ui.nonVintage} · {styleLabel(wine.style,locale)}
       </small>
       <h3>{wine.name}</h3>
       <p>{producer?.name}</p>
       <span>
-        Open wine <ArrowRight size={14} />
+        {ui.openWine} <ArrowRight size={14} />
       </span>
     </Link>
   );
 }
 
 function WinePage() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { slug } = useParams();
   const wine = wines.find((w) => w.id === slug);
   if (!wine) return <NotFound />;
@@ -937,6 +1030,7 @@ function WinePage() {
     repository.cellar.all().some((i) => i.wineId === wineId),
   );
   const [rating, setRating] = useRating(`wine:${slug}`);
+  const content=wineContent(wine,producer,region,locale)
   function add() {
     const items = repository.cellar.all();
     if (!items.some((i) => i.wineId === wineId)) {
@@ -945,7 +1039,7 @@ function WinePage() {
         wineId,
         state: "owned",
         quantity: 1,
-        location: "Home cellar",
+        location: ui.homeCellar,
       });
       repository.cellar.save(items);
     }
@@ -970,41 +1064,41 @@ function WinePage() {
               ATLAS
             </span>
             <b>{wine.name}</b>
-            <small>{wine.vintage ?? "Non-vintage"}</small>
+            <small>{wine.vintage ?? ui.nonVintage}</small>
           </div>
         </div>
         <div>
           <span className="eyebrow">
-            {wine.style} wine · {region.country}
+            {styleLabel(wine.style,locale)} {ui.wineType} · {countryLabel(region.country,locale)}
           </span>
           <h1>{wine.name}</h1>
           <p className="producer-name">{producer.name}</p>
-          <p className="lead">{wine.summary}</p>
+          <p className="lead">{content.summary}</p>
           <div className="wine-actions">
             <button className="primary-button" onClick={add}>
               {added ? (
                 <>
                   <Check size={17} />
-                  In your cellar
+                  {ui.inYourCellar}
                 </>
               ) : (
                 <>
                   <Plus size={17} />
-                  Add to cellar
+                  {ui.addToCellar}
                 </>
               )}
             </button>
             <button className="secondary-button">
               <Share2 size={17} />
-              Share
+              {ui.share}
             </button>
           </div>
         </div>
       </section>
       <section className="detail-layout">
         <div>
-          <span className="eyebrow">Blend & character</span>
-          <h2>A structured view</h2>
+          <span className="eyebrow">{ui.blendCharacter}</span>
+          <h2>{ui.structuredView}</h2>
           <div className="thread-cloud">
             {wineGrapes.map((g) => (
               <ThreadLink key={g.id} to={`/grapes/${g.id}`} tone="moss">
@@ -1012,50 +1106,64 @@ function WinePage() {
               </ThreadLink>
             ))}
           </div>
-          <p className="lead">{wine.serving}</p>
+          <p className="lead">{content.serving}</p>
         </div>
         <dl className="facts">
           <div>
-            <dt>Vintage</dt>
-            <dd>{wine.vintage ?? "Non-vintage blend"}</dd>
+            <dt>{ui.vintage}</dt>
+            <dd>{wine.vintage ?? ui.nonVintage}</dd>
           </div>
           <div>
-            <dt>Style</dt>
-            <dd>{wine.style.charAt(0).toUpperCase() + wine.style.slice(1)}</dd>
+            <dt>{ui.style}</dt>
+            <dd>{styleLabel(wine.style,locale)}</dd>
           </div>
           <div>
-            <dt>Community</dt>
+            <dt>{ui.community}</dt>
             <dd>
               <Stars value={Math.round(wine.communityRating)} />
-              <small>Community snapshot · {wine.communityRating}</small>
+              <small>{ui.communitySnapshot} · {wine.communityRating}</small>
             </dd>
           </div>
           <div>
-            <dt>Your rating</dt>
+            <dt>{ui.yourRating}</dt>
             <dd>
               <Stars value={rating} onChange={setRating} />
             </dd>
           </div>
         </dl>
       </section>
+      <section className="wine-process">
+        <div className="process-image"><img src={winemakingJourney} alt={ui.winemakingAlt}/><span>{wine.composition}</span></div>
+        <div className="process-copy">
+          <span className="eyebrow">{ui.fromFruitBottle}</span>
+          <h2>{ui.howStyleBuilt}</h2>
+          <ol>
+            <li><span>01</span><div><h3>{ui.composition}</h3><p>{wine.composition}</p></div></li>
+            <li><span>02</span><div><h3>{ui.vinification}</h3><p>{content.vinification}</p></div></li>
+            <li><span>03</span><div><h3>{ui.maturation}</h3><p>{content.maturation}</p></div></li>
+            <li><span>04</span><div><h3>{ui.whenOpen}</h3><p>{content.drinkWindow}</p></div></li>
+          </ol>
+        </div>
+      </section>
+      <section className="pairing-strip"><span className="eyebrow">{ui.atTable}</span><h2>{ui.pairEcho}</h2><div>{content.pairings.map(item=><span key={item}>{item}</span>)}</div></section>
       <section className="related-section">
-        <span className="eyebrow">Aroma profile</span>
-        <h2>Prompts for this style</h2>
+        <span className="eyebrow">{ui.aromaProfile}</span>
+        <h2>{ui.promptsStyle}</h2>
         <div className="aroma-profile">
           {wineAromas.map((a, index) => (
             <Link to={`/aromas?selected=${a.id}`} key={a.id}>
               <div>
-                <span>{a.family}</span>
-                <strong>{a.name}</strong>
+                <span>{aromaContent(a,locale).family}</span>
+                <strong>{aromaContent(a,locale).name}</strong>
               </div>
               <i style={{ width: `${55 + (index % 3) * 18}%` }} />
               <small>
                 {index % 3 === 0
-                  ? "Subtle"
+                  ? ui.subtle
                   : index % 3 === 1
-                    ? "Present"
-                    : "Pronounced"}{" "}
-                · {a.origin.split(".")[0]}
+                    ? ui.present
+                    : ui.pronounced}{" "}
+                · {aromaContent(a,locale).origin.split(".")[0]}
               </small>
             </Link>
           ))}
@@ -1064,72 +1172,63 @@ function WinePage() {
       <section className="note-callout">
         <div>
           <NotebookPen />
-          <span>Make it yours</span>
-          <h2>What will you remember?</h2>
-          <p>
-            Use the same aroma language across every tasting, then add the words
-            only you would choose.
-          </p>
+          <span>{ui.makeYours}</span>
+          <h2>{ui.rememberQuestion}</h2>
+          <p>{ui.noteBody}</p>
         </div>
         <Link to="/tastings/open-table" className="primary-button ink">
-          Open tasting notes
+          {ui.openNotes}
         </Link>
       </section>
     </article>
   );
 }
 
-const families = [
-  "Citrus",
-  "Orchard",
-  "Stone fruit",
-  "Tropical",
-  "Red fruit",
-  "Black fruit",
-  "Floral",
-  "Herbal",
-  "Spice",
-  "Earth & mineral",
-  "Fermentation",
-  "Oak",
-  "Age",
-  "Concentration",
-];
+const families = [...new Set(aromas.map((aroma) => aroma.family))];
 function AromaPage() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const query = new URLSearchParams(useLocation().search);
   const initial = query.get("selected");
   const initialAroma = aromas.find((a) => a.id === initial) ?? aromas[0];
   const initialStyle = initialAroma.styles[0] ?? "white";
   const [style, setStyle] = useState<WineStyle>(initialStyle);
+  const [tier, setTier] = useState<Aroma["tier"]>(initialAroma.tier);
+  const [intensity, setIntensity] = useState(1);
   const [family, setFamily] = useState(initialAroma.family);
   const [selected, setSelected] = useState<Aroma>(initialAroma);
   const visibleFamilies = families.filter((f) =>
-    aromas.some((a) => a.family === f && a.styles.includes(style)),
+    aromas.some((a) => a.family === f && a.styles.includes(style) && a.tier === tier),
   );
   const visibleAromas = aromas.filter(
-    (a) => a.family === family && a.styles.includes(style),
+    (a) => a.family === family && a.styles.includes(style) && a.tier === tier,
   );
+  const selectedContent=aromaContent(selected,locale)
   function selectStyle(nextStyle: WineStyle) {
+    const nextTier=aromas.some(a=>a.styles.includes(nextStyle)&&a.tier===tier)?tier:'primary'
     const nextFamily =
       families.find((candidate) =>
-        aromas.some(
-          (a) => a.family === candidate && a.styles.includes(nextStyle),
-        ),
+        aromas.some((a) => a.family === candidate && a.styles.includes(nextStyle) && a.tier === nextTier),
       ) ?? families[0];
     const nextAroma = aromas.find(
-      (a) => a.family === nextFamily && a.styles.includes(nextStyle),
+      (a) => a.family === nextFamily && a.styles.includes(nextStyle) && a.tier === nextTier,
     );
     setStyle(nextStyle);
+    setTier(nextTier)
     setFamily(nextFamily);
     if (nextAroma) setSelected(nextAroma);
+  }
+  function selectTier(nextTier: Aroma["tier"]) {
+    const nextAroma=aromas.find(a=>a.tier===nextTier&&a.styles.includes(style));if(!nextAroma)return
+    setTier(nextTier); setFamily(nextAroma.family); setSelected(nextAroma); setIntensity(1)
   }
   return (
     <div className="page aroma-page">
       <PageIntro eyebrow={copy.aromaEyebrow} title={copy.aromaTitle}>
         <p>{copy.aromaIntro}</p>
       </PageIntro>
-      <div className="lens-tabs" aria-label="Wine style lens">
+      <div className="lens-tabs" aria-label={ui.wineStyleLens}>
         {(
           [
             "white",
@@ -1148,9 +1247,12 @@ function AromaPage() {
             className={style === item ? "active" : ""}
             onClick={() => selectStyle(item)}
           >
-            {item}
+            {styleLabel(item,locale)}
           </button>
         ))}
+      </div>
+      <div className="aroma-tier-tabs" aria-label={ui.aromaOriginLayer}>
+        {(["primary","secondary","tertiary"] as const).map((item)=><button key={item} disabled={!aromas.some(a=>a.tier===item&&a.styles.includes(style))} className={tier===item?'active':''} onClick={()=>selectTier(item)}><span>{item==='primary'?'01':item==='secondary'?'02':'03'}</span><strong>{ui[item]}</strong><small>{item==='primary'?ui.primaryHelp:item==='secondary'?ui.secondaryHelp:ui.tertiaryHelp}</small></button>)}
       </div>
       <section className="wheel-layout">
         <div className="wheel-wrap">
@@ -1158,7 +1260,7 @@ function AromaPage() {
             viewBox="0 0 520 520"
             className="aroma-wheel"
             role="group"
-            aria-label={`${style} aroma family wheel`}
+            aria-label={`${styleLabel(style,locale)} · ${ui.aromaFamilyWheel}`}
           >
             {visibleFamilies.map((item, index) => {
               const angle = 360 / visibleFamilies.length;
@@ -1167,13 +1269,13 @@ function AromaPage() {
                   key={item}
                   role="button"
                   tabIndex={0}
-                  aria-label={item}
+                  aria-label={aromaContent(aromas.find(a=>a.family===item)!,locale).family}
                   className={family === item ? "selected" : ""}
                   d={donutPath(
                     260,
                     260,
                     104,
-                    224,
+                    196,
                     index * angle + 1,
                     (index + 1) * angle - 1,
                   )}
@@ -1197,16 +1299,21 @@ function AromaPage() {
                 />
               );
             })}
+            {visibleAromas.map((item,index)=>{
+              const angle=360/visibleAromas.length
+              const itemContent=aromaContent(item,locale)
+              return <path key={item.id} role="button" tabIndex={0} aria-label={`${itemContent.subfamily}: ${itemContent.name}`} className={`descriptor-segment ${selected.id===item.id?'selected':''}`} d={donutPath(260,260,204,248,index*angle+1,(index+1)*angle-1)} onClick={()=>{setSelected(item);setIntensity(1)}} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setSelected(item);setIntensity(1)}}}/>
+            })}
             <circle cx="260" cy="260" r="82" />
             <text x="260" y="248" data-testid="active-aroma-style">
               {style.toUpperCase()}
             </text>
             <text x="260" y="277">
-              AROMA LENS
+              {ui.aromaLens.toUpperCase()}
             </text>
             {visibleFamilies.map((item, index) => {
               const angle = (index + 0.5) * (360 / visibleFamilies.length) - 90;
-              const point = polar(260, 260, 165, angle);
+              const point = polar(260, 260, 150, angle);
               return (
                 <text
                   key={item}
@@ -1214,17 +1321,27 @@ function AromaPage() {
                   y={point.y}
                   className="wheel-label"
                 >
-                  {item.split(" ")[0]}
+                  {aromaContent(aromas.find(a=>a.family===item)!,locale).family.split(" ")[0]}
                 </text>
               );
+            })}
+            {visibleAromas.map((item,index)=>{
+              const angle=(index+.5)*(360/visibleAromas.length)-90
+              const point=polar(260,260,226,angle)
+              const label=aromaContent(item,locale).name
+              return <text key={item.id} x={point.x} y={point.y} className="descriptor-label">{label.length>10?label.slice(0,9)+'…':label}</text>
             })}
           </svg>
         </div>
         <aside className="aroma-detail">
-          <span className="eyebrow">{selected.family}</span>
-          <h2>{selected.name}</h2>
-          <p className="sensory-reference">“{selected.reference}”</p>
-          <p>{selected.origin}</p>
+          <span className="eyebrow">{selectedContent.family} · {selectedContent.subfamily}</span>
+          <h2>{selectedContent.name}</h2>
+          <p className="sensory-reference">“{selectedContent.reference}”</p>
+          <p>{selectedContent.origin}</p>
+          <div className="intensity-scale">
+            <div><span>{ui.intensityGlass}</span><strong>{selectedContent.intensity[intensity]}</strong></div>
+            <div>{selectedContent.intensity.map((label,index)=><button key={label} className={intensity===index?'active':''} onClick={()=>setIntensity(index)} aria-label={label}><i/></button>)}</div>
+          </div>
           <div className="aroma-options">
             {visibleAromas.map((a) => (
               <button
@@ -1232,7 +1349,7 @@ function AromaPage() {
                 onClick={() => setSelected(a)}
                 key={a.id}
               >
-                {a.name}
+                {aromaContent(a,locale).name}
               </button>
             ))}
           </div>
@@ -1257,6 +1374,7 @@ function AromaPage() {
           </div>
         </aside>
       </section>
+      <section className="aroma-reference-panel"><img src={aromaReference} alt={ui.aromaReferenceAlt}/><div><span className="eyebrow">{ui.calibrate}</span><h2>{ui.smellBeforeName}</h2><p>{ui.smellBody}</p><Link to="/learn/aroma-language" className="primary-button ink">{ui.openSensory}</Link></div></section>
       <section className="source-note">
         <BookOpen />
         <p>
@@ -1291,31 +1409,48 @@ function donutPath(
 
 function LearnPage() {
   const copy = usePageCopy();
+  const {locale}=useLocale()
+  const ui=useUiCopy()
+  const localizedArticles=articles.map(article=>articleContent(article,locale))
+  const tracks=[
+    {name:ui.trackTaste,description:ui.trackTasteBody,ids:['taste-with-intention','aroma-language','wine-faults']},
+    {name:ui.trackVineyard,description:ui.trackVineyardBody,ids:['vine-year','terroir-layers','climate-and-altitude']},
+    {name:ui.trackCellar,description:ui.trackCellarBody,ids:['vine-to-glass','fermentation','maturation-vessels','lees-and-malolactic']},
+    {name:ui.trackTable,description:ui.trackTableBody,ids:['labels-and-origin','food-pairing','service','cellaring']},
+  ]
   return (
     <div className="page learn-page">
       <PageIntro eyebrow={copy.learnEyebrow} title={copy.learnTitle}>
         <p>{copy.learnIntro}</p>
       </PageIntro>
       <section className="lead-article">
-        <img src={tastingStill} alt="Wine tasting table in a quiet cellar" />
+        <img src={winemakingJourney} alt={ui.learningJourneyAlt} />
         <div>
           <span>
-            {articles[0].eyebrow} · {articles[0].minutes} min
+            {localizedArticles[0].eyebrow} · {localizedArticles[0].minutes} {ui.minRead}
           </span>
-          <h2>{articles[0].title}</h2>
-          <p>{articles[0].summary}</p>
-          <Link to={`/learn/${articles[0].id}`} className="primary-button ink">
+          <h2>{localizedArticles[0].title}</h2>
+          <p>{localizedArticles[0].summary}</p>
+          <Link to={`/learn/${localizedArticles[0].id}`} className="primary-button ink">
             {copy.readStory}
           </Link>
         </div>
       </section>
+      <section className="learning-tracks">
+        <div className="section-heading"><div><span className="eyebrow">{ui.structuredPaths}</span><h2>{ui.chooseQuestion}</h2></div><span>{articles.length} {ui.illustratedLessons}</span></div>
+        <div>{tracks.map((track,index)=><article key={track.name}><span>0{index+1}</span><h3>{track.name}</h3><p>{track.description}</p><div>{track.ids.map(id=>{const lesson=localizedArticles.find(item=>item.id===id);return lesson?<Link key={id} to={`/learn/${id}`}>{lesson.title}<ChevronRight size={14}/></Link>:null})}</div></article>)}</div>
+      </section>
+      <section className="academy-visuals">
+        <Link to="/learn/terroir-layers"><img src={terroirIllustration} alt={ui.terroirAlt}/><span><small>{ui.interactiveFoundation}</small><strong>{ui.readTerroir}</strong></span></Link>
+        <Link to="/learn/aroma-language"><img src={aromaReference} alt={ui.aromaGlassAlt}/><span><small>{ui.sensoryPractice}</small><strong>{ui.buildMemory}</strong></span></Link>
+      </section>
       <div className="article-index">
-        {articles.slice(1).map((article, index) => (
+        {localizedArticles.slice(1).map((article, index) => (
           <Link to={`/learn/${article.id}`} key={article.id}>
             <span>{String(index + 2).padStart(2, "0")}</span>
             <div>
               <small>
-                {article.eyebrow} · {article.minutes} min
+                {article.eyebrow} · {article.minutes} {ui.minRead}
               </small>
               <h3>{article.title}</h3>
               <p>{article.summary}</p>
@@ -1329,40 +1464,41 @@ function LearnPage() {
 }
 function ArticlePage() {
   const copy = usePageCopy();
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { slug } = useParams();
-  const article = articles.find((a) => a.id === slug);
-  if (!article) return <NotFound />;
+  const sourceArticle = articles.find((a) => a.id === slug);
+  if (!sourceArticle) return <NotFound />;
+  const article=articleContent(sourceArticle,locale)
+  const nextArticle=articleContent(articles[(articles.indexOf(sourceArticle)+1)%articles.length],locale)
+  const illustration=article.image==='terroir'?terroirIllustration:article.image==='winemaking'?winemakingJourney:article.image==='aroma'?aromaReference:tastingStill
   return (
     <article className="page reading-page">
       <BackLink to="/learn" label={copy.learnEyebrow} />
       <header>
         <span className="eyebrow">
-          {article.eyebrow} · {article.minutes} minute read
+          {article.eyebrow} · {article.minutes} {ui.minuteRead}
         </span>
         <h1>{article.title}</h1>
         <p>{article.summary}</p>
       </header>
+      <figure className="lesson-hero"><img src={illustration} alt={`${ui.illustrationFor} ${article.title}`}/><figcaption>{ui.lessonCaption}</figcaption></figure>
+      <section className="lesson-objectives"><span className="eyebrow">{ui.byEnd}</span><h2>{ui.threeExplain}</h2><ol>{article.objectives.map((objective,index)=><li key={objective}><span>0{index+1}</span>{objective}</li>)}</ol></section>
       <div className="article-body">
         {article.body.map((p, i) => (
-          <p key={i}>{p}</p>
+          <section key={p}><span>{String(i+1).padStart(2,'0')}</span><p>{p}</p></section>
         ))}
-        <div className="pullquote">
-          Wine becomes easier to understand when every answer opens the next
-          good question.
-        </div>
+        <div className="lesson-lab"><div><span className="eyebrow">{ui.inTheGlass}</span><h3>{ui.concreteComparison}</h3><p>{article.example}</p></div><div><span className="eyebrow">{ui.tryYourself}</span><h3>{ui.fiveMinuteExercise}</h3><p>{article.exercise}</p></div></div>
         <h2>{copy.takeTable}</h2>
-        <p>
-          Return to one wine and notice a single element with intention. Name
-          what you perceive, compare it with a familiar reference, and leave
-          room for the glass to change.
-        </p>
+        <p>{ui.lessonPractice}</p>
       </div>
+      <section className="lesson-connections"><span className="eyebrow">{ui.continueAtlas}</span><h2>{ui.seeIdea}</h2><div className="thread-cloud">{regions.filter(region=>article.relatedRegionIds.includes(region.id)).map(region=><ThreadLink key={region.id} to={`/regions/${region.id}`} tone="moss">{region.name}</ThreadLink>)}{grapes.filter(grape=>article.relatedGrapeIds.includes(grape.id)).map(grape=><ThreadLink key={grape.id} to={`/grapes/${grape.id}`}>{grape.name}</ThreadLink>)}</div></section>
       <div className="next-read">
         <span>{copy.continueLearning}</span>
         <Link
-          to={`/learn/${articles[(articles.indexOf(article) + 1) % articles.length].id}`}
+          to={`/learn/${nextArticle.id}`}
         >
-          {articles[(articles.indexOf(article) + 1) % articles.length].title}
+          {nextArticle.title}
           <ArrowRight />
         </Link>
       </div>
@@ -1373,6 +1509,7 @@ function ArticlePage() {
 const tastingFlight = wines.slice(12, 17);
 function TastingsPage() {
   const { t } = useLocale();
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const [code, setCode] = useState("");
   const navigate = useNavigate();
@@ -1381,13 +1518,14 @@ function TastingsPage() {
       <PageIntro
         eyebrow={copy.tastingsEyebrow}
         title={copy.tastingsTitle}
+        action={<Link to="/tastings/build" className="primary-button"><Layers3 size={17}/> {ui.planJourney}</Link>}
       >
         <p>{copy.tastingsIntro}</p>
       </PageIntro>
       <section className="tasting-feature">
         <img
           src={tastingStill}
-          alt="Glasses and wine ready for a shared tasting"
+          alt={ui.tastingImageAlt}
         />
         <div>
           <span className="status-chip">
@@ -1399,7 +1537,7 @@ function TastingsPage() {
           <dl>
             <div>
               <dt>{copy.tonight}</dt>
-              <dd>19:30 · 75 min</dd>
+              <dd>19:30 · 75 {ui.minuteShort}</dd>
             </div>
             <div>
               <dt>{copy.host}</dt>
@@ -1407,7 +1545,7 @@ function TastingsPage() {
             </div>
             <div>
               <dt>{copy.seats}</dt>
-              <dd>8 of 12 joined</dd>
+              <dd>{ui.tastingSeats}</dd>
             </div>
           </dl>
           <Link to="/tastings/open-table" className="primary-button">
@@ -1432,7 +1570,7 @@ function TastingsPage() {
             maxLength={6}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="CELLAR"
-            aria-label="Tasting code"
+            aria-label={ui.tastingCode}
           />
           <button className="primary-button" disabled={code.length < 4}>
             {t("join")}
@@ -1444,19 +1582,19 @@ function TastingsPage() {
         <div className="session-list">
           <div>
             <b>14</b>
-            <span>SEP</span>
+            <span>{ui.sepAbbr}</span>
             <div>
-              <h3>Riesling: latitude and light</h3>
-              <p>Invite only · Hosted by Jo Becker</p>
+              <h3>{ui.rieslingSession}</h3>
+              <p>{ui.inviteOnly} · {ui.hostedBy} Jo Becker</p>
             </div>
             <LockKeyhole />
           </div>
           <div>
             <b>27</b>
-            <span>SEP</span>
+            <span>{ui.sepAbbr}</span>
             <div>
-              <h3>Mediterranean reds</h3>
-              <p>Open table · 16 seats</p>
+              <h3>{ui.mediterraneanReds}</h3>
+              <p>{ui.openTable} · 16 {ui.seats}</p>
             </div>
             <Users />
           </div>
@@ -1466,13 +1604,128 @@ function TastingsPage() {
   );
 }
 
+function chapterTypesFor(ui:ReturnType<typeof useUiCopy>):Array<{type:TastingChapterType;label:string;help:string}> {return [
+  {type:'wine',label:ui.chapterWine,help:ui.chapterWineHelp}, {type:'region',label:ui.chapterRegion,help:ui.chapterRegionHelp},
+  {type:'producer',label:ui.chapterProducer,help:ui.chapterProducerHelp}, {type:'grape',label:ui.chapterGrape,help:ui.chapterGrapeHelp},
+  {type:'aroma',label:ui.chapterAroma,help:ui.chapterAromaHelp}, {type:'article',label:ui.chapterLesson,help:ui.chapterLessonHelp},
+  {type:'host-note',label:ui.chapterHost,help:ui.chapterHostHelp}, {type:'pause',label:ui.chapterPause,help:ui.chapterPauseHelp},
+]}
+function optionsForChapter(type:TastingChapterType,locale:Locale='en') {
+  if(type==='wine') return wines.map(item=>({id:item.id,label:`${item.name} · ${item.vintage ?? 'NV'}`}))
+  if(type==='region') return regions.map(item=>({id:item.id,label:`${item.name} · ${countryLabel(item.country,locale)}`}))
+  if(type==='producer') return producers.map(item=>({id:item.id,label:item.name}))
+  if(type==='grape') return grapes.map(item=>({id:item.id,label:item.name}))
+  if(type==='aroma') return aromas.map(item=>{const content=aromaContent(item,locale);return {id:item.id,label:`${content.family} · ${content.name}`}})
+  if(type==='article') return articles.map(item=>({id:item.id,label:articleContent(item,locale).title}))
+  return []
+}
+function referenceTitle(type:TastingChapterType,id:string|undefined,locale:Locale,ui:ReturnType<typeof useUiCopy>) {
+  if(!id) return type==='pause'?ui.pauseConversation:ui.chapterHost
+  return optionsForChapter(type,locale).find(item=>item.id===id)?.label.split(' · ')[0] ?? ui.untitledChapter
+}
+function defaultJourney(locale:Locale,ui:ReturnType<typeof useUiCopy>):TastingJourney {
+  const first=wines[12], second=wines[13], region=regions.find(item=>item.id===first.regionId)!, producer=producers.find(item=>item.id===first.producerId)!
+  const chapters:Array<Omit<TastingChapter,'id'>>=[
+    {type:'host-note',title:ui.welcomeTable,hostNote:ui.welcomeQuestion,duration:4},
+    {type:'wine',referenceId:first.id,title:first.name,duration:12}, {type:'region',referenceId:region.id,title:region.name,duration:7},
+    {type:'producer',referenceId:producer.id,title:producer.name,duration:6}, {type:'article',referenceId:'red-white-rose',title:articleContent(articles.find(item=>item.id==='red-white-rose')!,locale).title,duration:8},
+    {type:'pause',title:ui.waterBreadConversation,hostNote:ui.compareNoticed,duration:5},
+    {type:'wine',referenceId:second.id,title:second.name,duration:12},
+  ]
+  return {id:crypto.randomUUID(),title:ui.defaultJourneyTitle,description:ui.defaultJourneyDescription,pace:'host',access:'invite',chapters:chapters.map(item=>({...item,id:crypto.randomUUID()})),updatedAt:new Date().toISOString()}
+}
+function TastingBuilder() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
+  const chapterTypes=chapterTypesFor(ui)
+  const navigate=useNavigate()
+  const [journey,setJourney]=useState<TastingJourney>(()=>defaultJourney(locale,ui))
+  const [type,setType]=useState<TastingChapterType>('wine')
+  const [referenceId,setReferenceId]=useState(()=>optionsForChapter('wine')[0]?.id ?? '')
+  const [note,setNote]=useState('')
+  const [duration,setDuration]=useState(7)
+  const [saved,setSaved]=useState(false)
+  const options=optionsForChapter(type,locale)
+  function chooseType(next:TastingChapterType){setType(next);setReferenceId(optionsForChapter(next,locale)[0]?.id ?? '');setNote('')}
+  function addChapter(){
+    const title=referenceTitle(type,referenceId,locale,ui)
+    setJourney(current=>({...current,chapters:[...current.chapters,{id:crypto.randomUUID(),type,referenceId:referenceId||undefined,title,hostNote:note||undefined,duration}],updatedAt:new Date().toISOString()}));setSaved(false)
+  }
+  function move(index:number,direction:-1|1){setJourney(current=>{const chapters=[...current.chapters],target=index+direction;if(target<0||target>=chapters.length)return current;[chapters[index],chapters[target]]=[chapters[target],chapters[index]];return {...current,chapters,updatedAt:new Date().toISOString()}});setSaved(false)}
+  function save(){const all=repository.journeys.all();repository.journeys.save([...all.filter(item=>item.id!==journey.id),journey]);setSaved(true)}
+  return <div className="page journey-builder">
+    <BackLink to="/tastings" label={ui.chapterLesson}/>
+    <PageIntro eyebrow={ui.hostStudio} title={ui.composeJourney} action={<button className="primary-button" onClick={save}>{saved?<><Check/>{ui.journeySaved}</>:<>{ui.saveJourney}<Check/></>}</button>}>
+      <p>{ui.composeBody}</p>
+    </PageIntro>
+    <section className="journey-settings">
+      <label>{ui.journeyTitle}<input value={journey.title} onChange={event=>setJourney({...journey,title:event.target.value})}/></label>
+      <label>{ui.invitationText}<textarea value={journey.description} onChange={event=>setJourney({...journey,description:event.target.value})}/></label>
+      <label>{ui.pacing}<select value={journey.pace} onChange={event=>setJourney({...journey,pace:event.target.value as TastingJourney['pace']})}><option value="host">{ui.hostUnlocks}</option><option value="self">{ui.guestPace}</option></select></label>
+      <label>{ui.access}<select value={journey.access} onChange={event=>setJourney({...journey,access:event.target.value as TastingJourney['access']})}><option value="invite">{ui.inviteQr}</option><option value="private">{ui.privateDraft}</option><option value="open">{ui.openTable}</option></select></label>
+    </section>
+    <div className="builder-layout">
+      <section className="chapter-palette">
+        <span className="eyebrow">{ui.addChapter}</span><h2>{ui.whatNext}</h2>
+        <div className="chapter-type-grid">{chapterTypes.map(item=><button key={item.type} className={type===item.type?'active':''} onClick={()=>chooseType(item.type)}><span>{item.label}</span><small>{item.help}</small></button>)}</div>
+        {options.length>0&&<label>{ui.atlasContent}<select value={referenceId} onChange={event=>setReferenceId(event.target.value)}>{options.map(item=><option value={item.id} key={item.id}>{item.label}</option>)}</select></label>}
+        {(type==='host-note'||type==='pause')&&<label>{ui.yourWords}<textarea value={note} onChange={event=>setNote(event.target.value)} placeholder={ui.hostPlaceholder}/></label>}
+        <label>{ui.timeTable}<div className="duration-input"><input type="range" min="2" max="25" value={duration} onChange={event=>setDuration(Number(event.target.value))}/><span>{duration} {ui.minuteShort}</span></div></label>
+        <button className="primary-button" onClick={addChapter}><Plus/>{ui.addStoryline}</button>
+      </section>
+      <section className="storyline-editor">
+        <div className="section-heading"><div><span className="eyebrow">{ui.storyline}</span><h2>{journey.chapters.length} {ui.chapters} · {journey.chapters.reduce((sum,item)=>sum+item.duration,0)} {ui.minuteShort}</h2></div></div>
+        <div className="storyline-list">{journey.chapters.map((chapter,index)=><article key={chapter.id}>
+          <GripVertical className="drag-hint"/><span className="chapter-number">{String(index+1).padStart(2,'0')}</span>
+          <div><small>{chapterTypes.find(item=>item.type===chapter.type)?.label} · {chapter.duration} {ui.minuteShort}</small><h3>{chapter.title}</h3>{chapter.hostNote&&<p>{chapter.hostNote}</p>}</div>
+          <div className="chapter-actions"><button onClick={()=>move(index,-1)} disabled={index===0} aria-label={ui.moveEarlier}><ChevronUp/></button><button onClick={()=>move(index,1)} disabled={index===journey.chapters.length-1} aria-label={ui.moveLater}><ChevronDown/></button><button onClick={()=>setJourney({...journey,chapters:journey.chapters.filter(item=>item.id!==chapter.id)})} aria-label={ui.removeChapter}><Trash2/></button></div>
+        </article>)}</div>
+        <div className="builder-footer"><div><strong>{journey.pace==='host'?ui.hostPaced:ui.selfPaced}</strong><span>{journey.access==='open'?ui.anyoneJoin:journey.access==='invite'?ui.inviteAccess:ui.privateDraft}</span></div><button className="secondary-button" onClick={()=>{save();navigate(`/tastings/${journey.id}`)}}>{ui.previewJourney} <ArrowRight/></button></div>
+      </section>
+    </div>
+  </div>
+}
+
+function JourneyExperience({journey}:{journey:TastingJourney}) {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
+  const chapterTypes=chapterTypesFor(ui)
+  const [current,setCurrent]=useState(0);const chapter=journey.chapters[current]
+  const wine=chapter?.type==='wine'?wines.find(item=>item.id===chapter.referenceId):undefined
+  const region=chapter?.type==='region'?regions.find(item=>item.id===chapter.referenceId):undefined
+  const producer=chapter?.type==='producer'?producers.find(item=>item.id===chapter.referenceId):undefined
+  const grape=chapter?.type==='grape'?grapes.find(item=>item.id===chapter.referenceId):undefined
+  const aroma=chapter?.type==='aroma'?aromas.find(item=>item.id===chapter.referenceId):undefined
+  const article=chapter?.type==='article'?articles.find(item=>item.id===chapter.referenceId):undefined
+  const link=wine?`/wines/${wine.id}`:region?`/regions/${region.id}`:producer?`/wineries/${producer.id}`:grape?`/grapes/${grape.id}`:aroma?`/aromas?selected=${aroma.id}`:article?`/learn/${article.id}`:null
+  const body=wine?wineContent(wine,producers.find(item=>item.id===wine.producerId)!,regions.find(item=>item.id===wine.regionId)!,locale).summary:region?regionContent(region,locale).summary:producer?producerContent(producer,regions.find(item=>item.id===producer.regionId)!,locale).summary:grape?grapeContent(grape,locale).summary:aroma?aromaContent(aroma,locale).reference:article?articleContent(article,locale).summary:chapter?.hostNote??ui.quietMoment
+  return <div className="journey-room">
+    <header><Link to="/tastings"><X/></Link><div><small>{journey.pace==='host'?ui.hostLearningJourney:ui.selfLearningJourney}</small><strong>{journey.title}</strong></div><span>{current+1} / {journey.chapters.length}</span></header>
+    <aside>{journey.chapters.map((item,index)=><button key={item.id} className={index===current?'active':index<current?'done':''} onClick={()=>setCurrent(index)}><span>{index<current?<Check/>:String(index+1).padStart(2,'0')}</span><div><small>{chapterTypes.find(type=>type.type===item.type)?.label}</small><strong>{item.title}</strong></div><em>{item.duration}m</em></button>)}</aside>
+    <main><span className="eyebrow">{ui.chapter} {String(current+1).padStart(2,'0')} · {chapterTypes.find(item=>item.type===chapter?.type)?.label}</span><h1>{chapter?.title}</h1><p className="lead">{body}</p>
+      {wine&&<div className="journey-wine"><div className={`room-bottle style-${wine.style}`}/><div><span>{wine.composition}</span><p>{wine.serving}</p></div></div>}
+      {region&&<div className="journey-facts"><article><span>{ui.climate}</span><p>{regionContent(region,locale).climate}</p></article><article><span>{ui.ground}</span><p>{regionContent(region,locale).soil}</p></article></div>}
+      {producer&&<div className="journey-facts"><article><span>{ui.vineyard}</span><p>{producerContent(producer,regions.find(item=>item.id===producer.regionId)!,locale).vineyard}</p></article><article><span>{ui.cellarLabel}</span><p>{producerContent(producer,regions.find(item=>item.id===producer.regionId)!,locale).cellar}</p></article></div>}
+      {grape&&<div className="journey-facts"><article><span>{ui.growing}</span><p>{grapeContent(grape,locale).ripening}</p></article><article><span>{ui.cellarLabel}</span><p>{grapeContent(grape,locale).winemaking}</p></article></div>}
+      {aroma&&<div className="journey-aroma"><span>{aromaContent(aroma,locale).family} · {aromaContent(aroma,locale).subfamily}</span><strong>{aromaContent(aroma,locale).name}</strong><p>{aromaContent(aroma,locale).origin}</p></div>}
+      {article&&<ol className="journey-objectives">{articleContent(article,locale).objectives.map(item=><li key={item}>{item}</li>)}</ol>}
+      {link&&<Link to={link} className="text-link">{ui.openComplete} <ArrowRight size={15}/></Link>}
+      <div className="journey-navigation"><button className="secondary-button" disabled={current===0} onClick={()=>setCurrent(current-1)}><ArrowLeft/>{ui.previous}</button><div><small>{ui.upNext}</small><strong>{journey.chapters[current+1]?.title??ui.journeyComplete}</strong></div><button className="primary-button" disabled={current===journey.chapters.length-1} onClick={()=>setCurrent(current+1)}>{ui.nextChapter}<ArrowRight/></button></div>
+    </main>
+  </div>
+}
+
 function TastingRoom() {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const { id = "open-table" } = useParams();
+  const journey=repository.journeys.all().find(item=>item.id===id)
+  if(journey) return <JourneyExperience journey={journey}/>
   const [current, setCurrent] = useState(0);
   const [step, setStep] = useState(0);
   const [selectedAromas, setSelectedAromas] = useState<string[]>([]);
   const [fields, setFields] = useState({
-    appearance: "Clear ruby with a bright rim",
+    appearance: ui.defaultAppearance,
     palate: "",
     reflection: "",
   });
@@ -1503,9 +1756,9 @@ function TastingRoom() {
         </Link>
         <div>
           <small>
-            Live tasting · Wine {current + 1} of {tastingFlight.length}
+            {ui.liveTasting} · {ui.wine} {current + 1} {ui.of} {tastingFlight.length}
           </small>
-          <strong>New world, old vines</strong>
+          <strong>{ui.defaultTastingTitle}</strong>
         </div>
         <button onClick={() => navigator.clipboard?.writeText(shareUrl)}>
           <Share2 />
@@ -1533,7 +1786,7 @@ function TastingRoom() {
             <h1>{wine.name}</h1>
             <p>
               {producers.find((p) => p.id === wine.producerId)?.name} ·{" "}
-              {wine.vintage}
+              {wine.vintage ?? ui.nonVintage}
             </p>
             <div className="thread-cloud">
               {grapes
@@ -1547,7 +1800,7 @@ function TastingRoom() {
           </div>
         </section>
         <div className="note-steps">
-          {["Look", "Smell", "Taste", "Reflect"].map((name, i) => (
+          {[ui.look, ui.smell, ui.taste, ui.reflect].map((name, i) => (
             <button
               onClick={() => setStep(i)}
               className={step === i ? "active" : ""}
@@ -1561,8 +1814,8 @@ function TastingRoom() {
         <section className="note-composer">
           {step === 0 && (
             <>
-              <span className="eyebrow">Step one · Look</span>
-              <h2>What does the glass show?</h2>
+              <span className="eyebrow">{ui.stepOne} · {ui.look}</span>
+              <h2>{ui.glassShow}</h2>
               <textarea
                 value={fields.appearance}
                 onChange={(e) =>
@@ -1573,12 +1826,9 @@ function TastingRoom() {
           )}
           {step === 1 && (
             <>
-              <span className="eyebrow">Step two · Smell</span>
-              <h2>Choose the closest references</h2>
-              <p>
-                There is no correct number. Start broad, then become more
-                precise.
-              </p>
+              <span className="eyebrow">{ui.stepTwo} · {ui.smell}</span>
+              <h2>{ui.closestReferences}</h2>
+              <p>{ui.noCorrectNumber}</p>
               <div className="note-aromas">
                 {aromas
                   .filter((a) => wine.aromaIds.includes(a.id))
@@ -1595,7 +1845,7 @@ function TastingRoom() {
                       key={a.id}
                     >
                       {selectedAromas.includes(a.id) && <Check />}
-                      {a.name}
+                      {aromaContent(a,locale).name}
                     </button>
                   ))}
               </div>
@@ -1603,10 +1853,10 @@ function TastingRoom() {
           )}
           {step === 2 && (
             <>
-              <span className="eyebrow">Step three · Taste</span>
-              <h2>How is the wine built?</h2>
+              <span className="eyebrow">{ui.stepThree} · {ui.taste}</span>
+              <h2>{ui.wineBuilt}</h2>
               <textarea
-                placeholder="Acidity, tannin, warmth, body, flavour and finish…"
+                placeholder={ui.palatePlaceholder}
                 value={fields.palate}
                 onChange={(e) =>
                   setFields({ ...fields, palate: e.target.value })
@@ -1616,10 +1866,10 @@ function TastingRoom() {
           )}
           {step === 3 && (
             <>
-              <span className="eyebrow">Step four · Reflect</span>
-              <h2>What will you remember?</h2>
+              <span className="eyebrow">{ui.stepFour} · {ui.reflect}</span>
+              <h2>{ui.remember}</h2>
               <textarea
-                placeholder="Balance, complexity, readiness, food and your own enjoyment…"
+                placeholder={ui.reflectionPlaceholder}
                 value={fields.reflection}
                 onChange={(e) =>
                   setFields({ ...fields, reflection: e.target.value })
@@ -1630,25 +1880,25 @@ function TastingRoom() {
           <div className="composer-actions">
             <small>
               <LockKeyhole />
-              Private to you
+              {ui.privateYou}
             </small>
             {step < 3 ? (
               <button
                 className="primary-button"
                 onClick={() => setStep(step + 1)}
               >
-                Next step <ArrowRight />
+                {ui.nextStep} <ArrowRight />
               </button>
             ) : (
               <button className="primary-button" onClick={saveNote}>
                 {saved ? (
                   <>
                     <Check />
-                    Note saved
+                    {ui.noteSaved}
                   </>
                 ) : (
                   <>
-                    Save note <NotebookPen />
+                    {ui.saveNote} <NotebookPen />
                   </>
                 )}
               </button>
@@ -1663,11 +1913,8 @@ function TastingRoom() {
           bgColor="#f4efe6"
           fgColor="#241920"
         />
-        <h3>Bring someone to the table</h3>
-        <p>
-          Share this QR or invite link. Browser-local notes are private by
-          default.
-        </p>
+        <h3>{ui.bringTable}</h3>
+        <p>{ui.shareQr}</p>
       </aside>
     </div>
   );
@@ -1675,6 +1922,7 @@ function TastingRoom() {
 
 function CellarPage() {
   const { t } = useLocale();
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const [items, setItems] = useState<CellarItem[]>(() =>
     repository.cellar.all(),
@@ -1739,12 +1987,12 @@ function CellarPage() {
             const wine = wines.find((w) => w.id === item.wineId);
             return (
               <article key={item.id}>
-                <div
-                  className={`cellar-bottle style-${wine?.style ?? "red"}`}
-                />
+                <div className={`cellar-bottle-media style-${wine?.style ?? "red"}`}>
+                  {item.imageDataUrl?<img src={item.imageDataUrl} alt={`${ui.bottle} · ${wine?.name||item.customName}`}/>:<div className="cellar-bottle"/>}
+                </div>
                 <div>
                   <small>
-                    {item.state} · {item.vintage || wine?.vintage || "NV"}
+                    {(item.state==='wishlist'?ui.wishList:ui[item.state])} · {item.vintage || wine?.vintage || ui.nonVintage}
                   </small>
                   <h3>{wine?.name || item.customName}</h3>
                   <p>
@@ -1767,7 +2015,7 @@ function CellarPage() {
                       <Minus />
                     </button>
                     <span>
-                      {item.quantity} bottle{item.quantity === 1 ? "" : "s"}
+                      {item.quantity} {item.quantity === 1 ? ui.bottle : ui.bottles}
                     </span>
                     <button
                       onClick={() =>
@@ -1826,10 +2074,18 @@ function CellarForm({
   onClose: () => void;
   onSave: (item: CellarItem) => void;
 }) {
+  const ui=useUiCopy()
   const [catalogue, setCatalogue] = useState(true);
   const [wineId, setWineId] = useState(wines[0].id);
   const [custom, setCustom] = useState({ name: "", producer: "", region: "" });
   const [state, setState] = useState<CellarItem["state"]>("owned");
+  const [imageDataUrl,setImageDataUrl]=useState<string>()
+  const [imageError,setImageError]=useState('')
+  const [preparingImage,setPreparingImage]=useState(false)
+  async function chooseImage(file?:File){
+    if(!file)return;setImageError('');setPreparingImage(true)
+    try{setImageDataUrl(await prepareBottlePhoto(file))}catch{setImageError(ui.photoError)}finally{setPreparingImage(false)}
+  }
   function submit(e: FormEvent) {
     e.preventDefault();
     onSave({
@@ -1843,7 +2099,8 @@ function CellarForm({
           }),
       state,
       quantity: 1,
-      location: "Home cellar",
+      location: ui.homeCellar,
+      imageDataUrl,
     });
   }
   return (
@@ -1857,27 +2114,31 @@ function CellarForm({
         <button type="button" className="sheet-close" onClick={onClose}>
           <X />
         </button>
-        <span className="eyebrow">Personal collection</span>
-        <h2>Add a wine</h2>
+        <span className="eyebrow">{ui.personalCollection}</span>
+        <h2>{ui.addWine}</h2>
+        <div className="bottle-photo-field">
+          <div className={imageDataUrl?'photo-preview has-photo':'photo-preview'}>{imageDataUrl?<img src={imageDataUrl} alt={ui.bottlePreview}/>:<ImagePlus/>}</div>
+          <div><strong>{ui.bottlePhoto}</strong><p>{ui.photoBody}</p><label className="secondary-button"><ImagePlus size={17}/>{preparingImage?ui.preparingPhoto:imageDataUrl?ui.changePhoto:ui.choosePhoto}<input type="file" accept="image/*" capture="environment" onChange={event=>chooseImage(event.target.files?.[0])}/></label>{imageDataUrl&&<button type="button" className="text-button" onClick={()=>setImageDataUrl(undefined)}>{ui.removePhoto}</button>}{imageError&&<span className="form-error">{imageError}</span>}</div>
+        </div>
         <div className="segmented">
           <button
             type="button"
             className={catalogue ? "active" : ""}
             onClick={() => setCatalogue(true)}
           >
-            From atlas
+            {ui.fromAtlas}
           </button>
           <button
             type="button"
             className={!catalogue ? "active" : ""}
             onClick={() => setCatalogue(false)}
           >
-            Personal entry
+            {ui.personalEntry}
           </button>
         </div>
         {catalogue ? (
           <label>
-            Wine
+            {ui.wine}
             <select value={wineId} onChange={(e) => setWineId(e.target.value)}>
               {wines.map((w) => (
                 <option key={w.id} value={w.id}>
@@ -1889,7 +2150,7 @@ function CellarForm({
         ) : (
           <>
             <label>
-              Wine name
+              {ui.wineName}
               <input
                 required
                 value={custom.name}
@@ -1897,7 +2158,7 @@ function CellarForm({
               />
             </label>
             <label>
-              Producer
+              {ui.producer}
               <input
                 value={custom.producer}
                 onChange={(e) =>
@@ -1906,7 +2167,7 @@ function CellarForm({
               />
             </label>
             <label>
-              Region
+              {ui.region}
               <input
                 value={custom.region}
                 onChange={(e) =>
@@ -1917,18 +2178,18 @@ function CellarForm({
           </>
         )}
         <label>
-          Collection
+          {ui.collection}
           <select
             value={state}
             onChange={(e) => setState(e.target.value as CellarItem["state"])}
           >
-            <option value="owned">Owned</option>
-            <option value="wishlist">Wish list</option>
-            <option value="tasted">Tasted</option>
-            <option value="finished">Finished</option>
+            <option value="owned">{ui.owned}</option>
+            <option value="wishlist">{ui.wishList}</option>
+            <option value="tasted">{ui.tasted}</option>
+            <option value="finished">{ui.finished}</option>
           </select>
         </label>
-        <button className="primary-button">Save to cellar</button>
+        <button className="primary-button">{ui.saveCellar}</button>
       </form>
     </div>
   );
@@ -1936,7 +2197,8 @@ function CellarForm({
 
 function AdminPage() {
   const { user } = useAuth();
-  const { t } = useLocale();
+  const { t,locale } = useLocale();
+  const ui=useUiCopy()
   const copy = usePageCopy();
   const [type, setType] = useState("Region");
   const [name, setName] = useState("");
@@ -1945,13 +2207,10 @@ function AdminPage() {
     return (
       <div className="page guarded">
         <ShieldCheck />
-        <h1>Curators only</h1>
-        <p>
-          The management workspace is available to administrators. Sign in with
-          your curator account from Profile to continue.
-        </p>
+        <h1>{ui.curatorsOnly}</h1>
+        <p>{ui.curatorsOnlyBody}</p>
         <Link to="/profile" className="primary-button ink">
-          Open profile
+          {ui.openProfile}
         </Link>
       </div>
     );
@@ -2001,10 +2260,10 @@ function AdminPage() {
       <section className="admin-layout">
         <div className="management-list">
           <div className="section-heading">
-            <h2>Recent catalogue records</h2>
+            <h2>{ui.recentRecords}</h2>
             <button>
               <Filter />
-              Filter
+              {ui.filter}
             </button>
           </div>
           {regions.slice(0, 6).map((region) => (
@@ -2014,55 +2273,52 @@ function AdminPage() {
               </span>
               <div>
                 <strong>{region.name}</strong>
-                <small>{region.country} · Curated · Reviewed 8 Aug 2026</small>
+                <small>{countryLabel(region.country,locale)} · {ui.curated} · {ui.reviewed} {new Intl.DateTimeFormat(locale,{dateStyle:'medium'}).format(new Date())}</small>
               </div>
-              <button>
+              <button aria-label={ui.settings}>
                 <Settings />
               </button>
             </div>
           ))}
         </div>
         <form className="admin-form" onSubmit={add}>
-          <span className="eyebrow">New record</span>
-          <h2>Add to the atlas</h2>
+          <span className="eyebrow">{ui.newRecord}</span>
+          <h2>{ui.addAtlas}</h2>
           <label>
-            Record type
+            {ui.recordType}
             <select value={type} onChange={(e) => setType(e.target.value)}>
-              <option>Region</option>
-              <option>Grape</option>
-              <option>Producer</option>
-              <option>Wine</option>
-              <option>Tasting</option>
+              <option value="Region">{ui.region}</option>
+              <option value="Grape">{ui.grape}</option>
+              <option value="Producer">{ui.producer}</option>
+              <option value="Wine">{ui.wine}</option>
+              <option value="Tasting">{ui.tasting}</option>
             </select>
           </label>
           <label>
-            Published name
+            {ui.publishedName}
             <input
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="The name readers will see"
+              placeholder={ui.publishedNamePlaceholder}
             />
           </label>
           <label>
-            Connect to region
+            {ui.connectRegion}
             <select>
-              <option>Select a region</option>
+              <option>{ui.selectRegion}</option>
               {regions.slice(0, 20).map((r) => (
                 <option key={r.id}>{r.name}</option>
               ))}
             </select>
           </label>
-          <p>
-            New records remain personal to this browser until reviewed and moved
-            to a hosted catalogue.
-          </p>
+          <p>{ui.localRecordBody}</p>
           <button className="primary-button">{t("create")}</button>
         </form>
       </section>
       {items.length > 0 && (
         <section className="related-section">
-          <h2>Personal additions</h2>
+          <h2>{ui.personalAdditions}</h2>
           <div className="simple-list">
             {items.map((item: any) => (
               <div key={item.id}>
@@ -2070,7 +2326,7 @@ function AdminPage() {
                 <span>
                   {item.name} · {item.type}
                 </span>
-                <button
+                <button aria-label={ui.remove}
                   onClick={() => {
                     const next = items.filter(
                       (entry: any) => entry.id !== item.id,
@@ -2273,6 +2529,8 @@ function AuthSheet({ onClose }: { onClose: () => void }) {
 }
 
 function GlobalSearch({ onClose }: { onClose: () => void }) {
+  const {locale}=useLocale()
+  const ui=useUiCopy()
   const [query, setQuery] = useState("");
   const results = useMemo(() => {
     if (query.trim().length < 2) return [];
@@ -2282,28 +2540,28 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
         .filter((x) => `${x.name} ${x.country}`.toLowerCase().includes(q))
         .slice(0, 4)
         .map((x) => ({
-          type: "Region",
+          type: ui.region,
           name: x.name,
-          meta: x.country,
+          meta: countryLabel(x.country,locale),
           to: `/regions/${x.id}`,
         })),
       ...grapes
         .filter((x) => x.name.toLowerCase().includes(q))
         .slice(0, 3)
         .map((x) => ({
-          type: "Grape",
+          type: ui.grape,
           name: x.name,
           meta:
             x.color === "red"
-              ? "Dark-skinned variety"
-              : "Light-skinned variety",
+              ? ui.darkVariety
+              : ui.lightVariety,
           to: `/grapes/${x.id}`,
         })),
       ...producers
         .filter((x) => x.name.toLowerCase().includes(q))
         .slice(0, 3)
         .map((x) => ({
-          type: "Producer",
+          type: ui.producer,
           name: x.name,
           meta: regions.find((r) => r.id === x.regionId)?.name || "",
           to: `/wineries/${x.id}`,
@@ -2312,22 +2570,22 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
         .filter((x) => x.name.toLowerCase().includes(q))
         .slice(0, 4)
         .map((x) => ({
-          type: "Wine",
+          type: ui.wine,
           name: x.name,
-          meta: `${x.vintage ?? "NV"} · ${x.style}`,
+          meta: `${x.vintage ?? ui.nonVintage} · ${styleLabel(x.style,locale)}`,
           to: `/wines/${x.id}`,
         })),
       ...articles
-        .filter((x) => `${x.title} ${x.summary}`.toLowerCase().includes(q))
+        .filter((x) => {const content=articleContent(x,locale);return `${content.title} ${content.summary}`.toLowerCase().includes(q)})
         .slice(0, 2)
         .map((x) => ({
-          type: "Field note",
-          name: x.title,
-          meta: `${x.minutes} min read`,
+          type: ui.fieldNote,
+          name: articleContent(x,locale).title,
+          meta: `${x.minutes} ${ui.minRead}`,
           to: `/learn/${x.id}`,
         })),
     ];
-  }, [query]);
+  }, [query,locale,ui]);
   return (
     <div className="search-overlay">
       <header>
@@ -2336,7 +2594,7 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Region, grape, producer, wine or guide"
+          placeholder={ui.searchPlaceholder}
         />
         <button onClick={onClose}>
           <X />
@@ -2345,8 +2603,8 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
       <div className="search-body">
         {query.length < 2 ? (
           <div className="search-start">
-            <span className="eyebrow">Trace a connection</span>
-            <h2>Where would you like to begin?</h2>
+            <span className="eyebrow">{ui.searchTrace}</span>
+            <h2>{ui.whereBegin}</h2>
             <div className="search-suggestions">
               {["Mosel", "Pinot Noir", "Mendoza", "Brioche"].map((item) => (
                 <button onClick={() => setQuery(item)} key={item}>
@@ -2370,11 +2628,8 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
           </div>
         ) : (
           <div className="search-start">
-            <h2>No path found yet</h2>
-            <p>
-              Try a broader place, grape or aroma. “Germany”, “Riesling” and
-              “cassis” are good starting points.
-            </p>
+            <h2>{ui.noSearchPath}</h2>
+            <p>{ui.noSearchHelp}</p>
           </div>
         )}
       </div>
@@ -2393,16 +2648,14 @@ function useRating(key: string) {
   return [value, update] as const;
 }
 function NotFound() {
+  const ui=useUiCopy()
   return (
     <div className="page guarded">
       <Compass />
-      <h1>This path leaves the map</h1>
-      <p>
-        The place you were looking for is not in this atlas. Return to the world
-        view and begin another thread.
-      </p>
+      <h1>{ui.thisPath}</h1>
+      <p>{ui.notFoundBody}</p>
       <Link to="/atlas" className="primary-button ink">
-        Open the atlas
+        {ui.openAtlas}
       </Link>
     </div>
   );

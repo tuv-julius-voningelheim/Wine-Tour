@@ -1,7 +1,7 @@
-import type { CellarItem, TastingNote, User } from '../types'
+import type { CellarItem, TastingJourney, TastingNote, User } from '../types'
 
 const keys = {
-  users:'vine-atlas.users', session:'vine-atlas.session', cellar:'vine-atlas.cellar', notes:'vine-atlas.notes', ratings:'vine-atlas.ratings', additions:'vine-atlas.additions'
+  users:'vine-atlas.users', session:'vine-atlas.session', cellar:'vine-atlas.cellar', notes:'vine-atlas.notes', ratings:'vine-atlas.ratings', additions:'vine-atlas.additions', journeys:'vine-atlas.journeys'
 } as const
 
 function read<T>(key:string, fallback:T):T {
@@ -16,6 +16,7 @@ export const repository = {
   notes: { all:()=>read<TastingNote[]>(keys.notes,[]), save:(notes:TastingNote[])=>write(keys.notes,notes) },
   ratings: { all:()=>read<Record<string,number>>(keys.ratings,{}), save:(ratings:Record<string,number>)=>write(keys.ratings,ratings) },
   additions: { all:()=>read<Record<string,unknown>[]>(keys.additions,[]), save:(items:Record<string,unknown>[])=>write(keys.additions,items) },
+  journeys: { all:()=>read<TastingJourney[]>(keys.journeys,[]), save:(items:TastingJourney[])=>write(keys.journeys,items) },
 }
 
 export async function hashPassword(password:string,salt:string){
