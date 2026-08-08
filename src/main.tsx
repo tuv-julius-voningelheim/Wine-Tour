@@ -3,15 +3,19 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import 'leaflet/dist/leaflet.css'
 import './styles.css'
+import './enhancements.css'
 import App from './App'
 import { LocaleProvider } from './i18n'
 import { AuthProvider } from './auth'
 import { validateCatalog } from './data/catalog'
-import { uiCopyCompleteness } from './uiCopy'
+import { validateBusinessData } from './data/business'
+import { businessUiCopyCompleteness, uiCopyCompleteness } from './uiCopy'
 
 const errors=[
   ...validateCatalog(),
+  ...validateBusinessData(),
   ...Object.entries(uiCopyCompleteness).flatMap(([locale,keys])=>keys.map(key=>`Incomplete ${locale} UI copy: ${key}`)),
+  ...Object.entries(businessUiCopyCompleteness).flatMap(([locale,keys])=>keys.map(key=>`Incomplete ${locale} business UI copy: ${key}`)),
 ]
 if(errors.length) throw new Error(`Content validation failed:\n${errors.join('\n')}`)
 

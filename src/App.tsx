@@ -75,11 +75,30 @@ import { aromaContent, articleContent, countryLabel, grapeContent, producerConte
 import { useUiCopy } from "./uiCopy";
 import { useAuth } from "./auth";
 import type { Aroma, CellarItem, TastingChapter, TastingChapterType, TastingJourney, TastingNote, WineStyle } from "./types";
-import vineyardHero from "./assets/vineyard-terraces.png";
-import tastingStill from "./assets/tasting-still-life.png";
-import terroirIllustration from "./assets/terroir-cross-section.png";
-import aromaReference from "./assets/aroma-reference-table.png";
-import winemakingJourney from "./assets/winemaking-journey.png";
+import vineyardHero from "./assets/vineyard-terraces.jpg";
+import tastingStill from "./assets/tasting-still-life.jpg";
+import terroirIllustration from "./assets/terroir-cross-section.jpg";
+import aromaReference from "./assets/aroma-reference-table.jpg";
+import winemakingJourney from "./assets/winemaking-journey.jpg";
+import soilAtlas from "./assets/vineyard-soil-atlas.jpg";
+import bottleForms from "./assets/wine-bottle-forms.jpg";
+import vineSeasonStudy from "./assets/vine-season-study.jpg";
+import mediterraneanVines from "./assets/region-mediterranean-vines.jpg";
+import andesVineyard from "./assets/region-andes-vineyard.jpg";
+import maritimeVineyard from "./assets/region-maritime-vineyard.jpg";
+import volcanicVineyard from "./assets/region-volcanic-vineyard.jpg";
+import { AtlasCommercialPlacements, BusinessAdminPanel, EventDetail, EventsMarketplace, FeaturedBusinessHome, HostProfile, PartnerProfilePage, ProducerBusinessLayer, StudioEvents, StudioHome, StudioOffers, StudioPlacements, StudioSite, WineMerchantOffers } from "./BusinessPlatform";
+import { CellarExperience } from "./CellarExperience";
+import { AcademyMasterclass, GrapeAmpelography, GrapeDeepDive, ProducerDecisionMap, RegionFieldGuide, WineEvolutionLesson } from "./LearningDepth";
+
+function regionHeroFor(region:{country:string;climate:string;soil:string;lat:number}){
+  const signal=`${region.country} ${region.climate} ${region.soil}`.toLowerCase()
+  if(/volcan|basalt|lava|etna|santorini|canary|azores|madeira/.test(signal)) return volcanicVineyard
+  if(/argentina|mendoza|uco|salta|chile|ande|high-altitude|altitude/.test(signal)) return andesVineyard
+  if(/atlantic|maritime|ocean|coast|fog|mist|rias baixas|casablanca|marlborough/.test(signal)) return maritimeVineyard
+  if(/mediterranean|provence|sicil|sard|greece|lebanon|israel|cyprus|languedoc|priorat/.test(signal)||Math.abs(region.lat)<36) return mediterraneanVines
+  return vineyardHero
+}
 
 const navItems = [
   { to: "/", key: "home" as const, icon: Compass, end: true },
@@ -106,7 +125,16 @@ export default function App() {
         <Route path="/tastings" element={<TastingsPage />} />
         <Route path="/tastings/build" element={<TastingBuilder />} />
         <Route path="/tastings/:id" element={<TastingRoom />} />
-        <Route path="/cellar" element={<CellarPage />} />
+        <Route path="/events" element={<EventsMarketplace />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/hosts/:id" element={<HostProfile />} />
+        <Route path="/partners/:id" element={<PartnerProfilePage />} />
+        <Route path="/studio" element={<StudioHome />} />
+        <Route path="/studio/events" element={<StudioEvents />} />
+        <Route path="/studio/site" element={<StudioSite />} />
+        <Route path="/studio/offers" element={<StudioOffers />} />
+        <Route path="/studio/placements" element={<StudioPlacements />} />
+        <Route path="/cellar" element={<CellarExperience />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<NotFound />} />
@@ -150,6 +178,14 @@ function AppShell({
           ))}
         </nav>
         <div className="rail-lower">
+          <NavLink to="/events">
+            <Users size={20} />
+            <span>{ui.eventsNav}</span>
+          </NavLink>
+          <NavLink to="/studio">
+            <Settings size={20} />
+            <span>{ui.studioNav}</span>
+          </NavLink>
           <NavLink to="/learn">
             <Library size={20} />
             <span>{t("learn")}</span>
@@ -320,6 +356,7 @@ function HomePage() {
           {copy.joinTime} <ArrowRight size={16} />
         </Link>
       </section>
+      <FeaturedBusinessHome />
       <section className="section-block">
         <div className="section-heading">
           <div>
@@ -338,7 +375,7 @@ function HomePage() {
               key={region.id}
             >
               <div className={`region-image crop-${index}`}>
-                <img src={vineyardHero} alt={ui.vineyardLandscapeAlt} />
+                <img src={regionHeroFor(region)} alt={ui.vineyardLandscapeAlt} />
                 <span>{String(index + 1).padStart(2, "0")}</span>
               </div>
               <div>
@@ -451,6 +488,8 @@ function AtlasPage() {
   const [grapeId,setGrapeId]=useState('all')
   const [linkedOnly,setLinkedOnly]=useState(false)
   const [sort,setSort]=useState<'name'|'country'|'links'>('name')
+  const [page,setPage]=useState(1)
+  const [pageSize,setPageSize]=useState(12)
   const [zoom, setZoom] = useState(3);
   const countries=[...new Set(regions.map(region=>region.country))].sort()
   const q=query.trim().toLowerCase()
@@ -467,6 +506,14 @@ function AtlasPage() {
   }).sort((a,b)=>{const ar=regions.find(item=>item.id===a.regionId)!,br=regions.find(item=>item.id===b.regionId)!;return sort==='country'?`${ar.country}${a.name}`.localeCompare(`${br.country}${b.name}`):sort==='links'?b.wineIds.length-a.wineIds.length:a.name.localeCompare(b.name)})
   const producerGroups=filteredRegions.map(region=>({region,items:filteredProducers.filter(producer=>producer.regionId===region.id)})).filter(group=>group.items.length)
   const resultCount=layer==='regions'?filteredRegions.length:filteredProducers.length
+  const pageCount=Math.max(1,Math.ceil(resultCount/pageSize))
+  const currentPage=Math.min(page,pageCount)
+  const pageStart=(currentPage-1)*pageSize
+  const pagedRegions=filteredRegions.slice(pageStart,pageStart+pageSize)
+  const pagedProducers=filteredProducers.slice(pageStart,pageStart+pageSize)
+  const directoryCopy={en:{page:'Page',of:'of',perPage:'per page',previous:'Previous',next:'Next',refine:'Refine this directory'},de:{page:'Seite',of:'von',perPage:'pro Seite',previous:'Zurück',next:'Weiter',refine:'Dieses Verzeichnis filtern'},fr:{page:'Page',of:'sur',perPage:'par page',previous:'Précédent',next:'Suivant',refine:'Affiner cet annuaire'},es:{page:'Página',of:'de',perPage:'por página',previous:'Anterior',next:'Siguiente',refine:'Filtrar este directorio'}}[locale]
+  const changeDirectoryPage=(next:number)=>{setPage(Math.min(pageCount,Math.max(1,next)));window.setTimeout(()=>document.querySelector('.atlas-index')?.scrollIntoView({behavior:'smooth',block:'start'}),0)}
+  useEffect(()=>setPage(1),[query,country,grapeId,linkedOnly,sort,layer,pageSize])
   const selectedContent=regionContent(selected,locale)
   return (
     <div className="page atlas-page">
@@ -503,10 +550,11 @@ function AtlasPage() {
         <label><span>{ui.country}</span><select value={country} onChange={event=>setCountry(event.target.value)}><option value="all">{ui.allCountries}</option>{countries.map(item=><option value={item} key={item}>{countryLabel(item,locale)}</option>)}</select></label>
         <label><span>{ui.variety}</span><select value={grapeId} onChange={event=>setGrapeId(event.target.value)}><option value="all">{ui.allVarieties}</option>{grapes.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(grape=><option value={grape.id} key={grape.id}>{grape.name}</option>)}</select></label>
         <label><span>{ui.sort}</span><select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="name">{ui.sortName}</option><option value="country">{ui.sortCountry}</option><option value="links">{ui.sortLinks}</option></select></label>
-        <button className={linkedOnly?'active':''} onClick={()=>setLinkedOnly(value=>!value)}><Check size={15}/>{ui.linkedOnly}</button>
+        <button className={linkedOnly?'active':''} aria-pressed={linkedOnly} onClick={()=>setLinkedOnly(value=>!value)}>{linkedOnly?<Check size={15}/>:<ListFilter size={15}/>} {ui.linkedOnly}</button>
         {(q||country!=='all'||grapeId!=='all'||linkedOnly)&&<button className="clear-filters" onClick={()=>{setQuery('');setCountry('all');setGrapeId('all');setLinkedOnly(false)}}><X size={15}/>{ui.clearFilters}</button>}
       </div>
       <section className="map-shell">
+        <AtlasCommercialPlacements />
         <div className="atlas-map">
           <MapContainer
             center={[35, 5]}
@@ -602,13 +650,21 @@ function AtlasPage() {
           <div><span className="eyebrow">{ui.completeDirectory}</span><h2 aria-live="polite">{resultCount} {layer==='regions'?ui.wineRegions:ui.wineries}</h2></div>
           <span>Map · {zoom} · {ui.mapShowing}</span>
         </div>
+        <div className="atlas-directory-tools" aria-label={directoryCopy.refine}>
+          <label className="search-field"><Search size={17}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder={ui.searchAll}/></label>
+          <label><span>{ui.country}</span><select value={country} onChange={event=>setCountry(event.target.value)}><option value="all">{ui.allCountries}</option>{countries.map(item=><option value={item} key={item}>{countryLabel(item,locale)}</option>)}</select></label>
+          <label><span>{ui.variety}</span><select value={grapeId} onChange={event=>setGrapeId(event.target.value)}><option value="all">{ui.allVarieties}</option>{grapes.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(grape=><option value={grape.id} key={grape.id}>{grape.name}</option>)}</select></label>
+          <label><span>{ui.sort}</span><select value={sort} onChange={event=>setSort(event.target.value as typeof sort)}><option value="name">{ui.sortName}</option><option value="country">{ui.sortCountry}</option><option value="links">{ui.sortLinks}</option></select></label>
+          <label><span>{directoryCopy.perPage}</span><select value={pageSize} onChange={event=>setPageSize(Number(event.target.value))}><option value="8">8</option><option value="12">12</option><option value="24">24</option></select></label>
+        </div>
         {resultCount===0?<div className="directory-empty"><Search/><h3>{ui.noPath}</h3><p>{ui.noPathHelp}</p></div>:<div className="atlas-directory">
-          {layer==='regions'?filteredRegions.map(region=><Link to={`/regions/${region.id}`} key={region.id}>
+          {layer==='regions'?pagedRegions.map(region=><Link to={`/regions/${region.id}`} key={region.id}>
             <div className="directory-index">{String(regions.indexOf(region)+1).padStart(3,'0')}</div><div><small>{countryLabel(region.country,locale)}</small><h3>{region.name}</h3><p>{regionContent(region,locale).climate}</p></div><dl><span>{region.grapeIds.length} {ui.linkedVarieties}</span><span>{region.producerIds.length} {ui.linkedWineries}</span></dl><ChevronRight/>
-          </Link>):filteredProducers.map(producer=>{const region=regions.find(item=>item.id===producer.regionId)!,pc=producerContent(producer,region,locale);return <Link to={`/wineries/${producer.id}`} key={producer.id}>
+          </Link>):pagedProducers.map(producer=>{const region=regions.find(item=>item.id===producer.regionId)!,pc=producerContent(producer,region,locale);return <Link to={`/wineries/${producer.id}`} key={producer.id}>
             <div className="directory-monogram">{producer.name.charAt(0)}</div><div><small>{countryLabel(region.country,locale)} · {region.name}</small><h3>{producer.name}</h3><p>{pc.speciality}</p></div><dl><span>{producer.wineIds.length} {ui.linkedWines}</span><span>{producer.communityRating.toFixed(1)} {ui.communityShort}</span></dl><ChevronRight/>
           </Link>})}
         </div>}
+        {resultCount>pageSize&&<nav className="directory-pagination" aria-label={`${directoryCopy.page} ${currentPage} ${directoryCopy.of} ${pageCount}`}><button disabled={currentPage===1} onClick={()=>changeDirectoryPage(currentPage-1)}><ArrowLeft/>{directoryCopy.previous}</button><span><strong>{directoryCopy.page} {currentPage}</strong> {directoryCopy.of} {pageCount}<small>{pageStart+1}–{Math.min(pageStart+pageSize,resultCount)} / {resultCount}</small></span><button disabled={currentPage===pageCount} onClick={()=>changeDirectoryPage(currentPage+1)}>{directoryCopy.next}<ArrowRight/></button></nav>}
       </section>
     </div>
   );
@@ -634,8 +690,8 @@ function RegionPage() {
       <BackLink to="/atlas" label={ui.worldAtlas} />
       <section className="detail-hero">
         <img
-          src={vineyardHero}
-          alt={`Vineyard landscape introducing ${region.name}`}
+          src={regionHeroFor(region)}
+          alt={`${region.name} · ${countryLabel(region.country,locale)}`}
         />
         <div className="detail-hero-copy">
           <span>{countryLabel(region.country,locale)}</span>
@@ -717,6 +773,7 @@ function RegionPage() {
           </div>
         </div>
       </section>
+      <RegionFieldGuide region={region} locale={locale}/>
       <section className="knowledge-panels">
         <article>
           <span className="eyebrow">{ui.stylesCompare}</span>
@@ -801,7 +858,8 @@ function GrapePage() {
   const grape = grapes.find((g) => g.id === slug);
   if (!grape) return <NotFound />;
   const relatedRegions = regions
-    .filter((r) => r.grapeIds.includes(grape.id))
+    .filter((r) => r.grapeIds.includes(grape.id)&&wines.some(wine=>wine.regionId===r.id&&wine.grapeIds.includes(grape.id)))
+    .sort((a,b)=>b.wineIds.filter(id=>wines.find(wine=>wine.id===id)?.grapeIds.includes(grape.id)).length-a.wineIds.filter(id=>wines.find(wine=>wine.id===id)?.grapeIds.includes(grape.id)).length)
     .slice(0, 8);
   const grapeAromas = aromas.filter((a) => grape.aromaIds.includes(a.id));
   const relatedWines = wines
@@ -852,6 +910,8 @@ function GrapePage() {
           <article><span>{ui.inCellar}</span><h3>{ui.textureExpression}</h3><p>{content.winemaking}</p></article>
         </div>
       </section>
+      <GrapeDeepDive grape={grape} locale={locale}/>
+      <GrapeAmpelography grape={grape} locale={locale}/>
       <section className="knowledge-panels">
         <article><span className="eyebrow">{ui.styleRange}</span><h3>{ui.lookExpressions}</h3><ul>{content.styles.map(item=><li key={item}>{item}</li>)}</ul></article>
         <article><span className="eyebrow">{ui.atTable}</span><h3>{ui.pairStructure}</h3><ul>{content.pairings.map(item=><li key={item}>{item}</li>)}</ul></article>
@@ -936,6 +996,7 @@ function ProducerPage() {
           alt={ui.producerHeroAlt}
         />
       </section>
+      <ProducerBusinessLayer producerId={producer.id} />
       <section className="detail-layout">
         <div>
           <span className="eyebrow">{ui.pointView}</span>
@@ -973,6 +1034,7 @@ function ProducerPage() {
         </div>
         <a href={producer.sourceUrl} target="_blank" rel="noreferrer" className="text-link">{ui.visitPrimary} <ArrowRight size={15}/></a>
       </section>
+      <ProducerDecisionMap producer={producer} region={region} locale={locale}/>
       <section className="related-section">
         <span className="eyebrow">{ui.fromCellar}</span>
         <h2>
@@ -1145,6 +1207,7 @@ function WinePage() {
           </ol>
         </div>
       </section>
+      <WineEvolutionLesson wine={wine} locale={locale}/>
       <section className="pairing-strip"><span className="eyebrow">{ui.atTable}</span><h2>{ui.pairEcho}</h2><div>{content.pairings.map(item=><span key={item}>{item}</span>)}</div></section>
       <section className="related-section">
         <span className="eyebrow">{ui.aromaProfile}</span>
@@ -1169,6 +1232,7 @@ function WinePage() {
           ))}
         </div>
       </section>
+      <WineMerchantOffers wineId={wine.id} />
       <section className="note-callout">
         <div>
           <NotebookPen />
@@ -1443,6 +1507,8 @@ function LearnPage() {
       <section className="academy-visuals">
         <Link to="/learn/terroir-layers"><img src={terroirIllustration} alt={ui.terroirAlt}/><span><small>{ui.interactiveFoundation}</small><strong>{ui.readTerroir}</strong></span></Link>
         <Link to="/learn/aroma-language"><img src={aromaReference} alt={ui.aromaGlassAlt}/><span><small>{ui.sensoryPractice}</small><strong>{ui.buildMemory}</strong></span></Link>
+        <Link to="/learn/vine-year"><img src={vineSeasonStudy} alt=""/><span><small>{ui.structuredPaths}</small><strong>{localizedArticles.find(article=>article.id==='vine-year')?.title}</strong></span></Link>
+        <Link to="/learn/soil-water-roots"><img src={soilAtlas} alt=""/><span><small>{ui.interactiveFoundation}</small><strong>{localizedArticles.find(article=>article.id==='soil-water-roots')?.title}</strong></span></Link>
       </section>
       <div className="article-index">
         {localizedArticles.slice(1).map((article, index) => (
@@ -1471,7 +1537,7 @@ function ArticlePage() {
   if (!sourceArticle) return <NotFound />;
   const article=articleContent(sourceArticle,locale)
   const nextArticle=articleContent(articles[(articles.indexOf(sourceArticle)+1)%articles.length],locale)
-  const illustration=article.image==='terroir'?terroirIllustration:article.image==='winemaking'?winemakingJourney:article.image==='aroma'?aromaReference:tastingStill
+  const illustration=article.image==='terroir'?terroirIllustration:article.image==='winemaking'?winemakingJourney:article.image==='aroma'?aromaReference:article.image==='soil'?soilAtlas:article.image==='bottle'?bottleForms:article.id==='vine-year'||article.id==='vintage-weather'?vineSeasonStudy:tastingStill
   return (
     <article className="page reading-page">
       <BackLink to="/learn" label={copy.learnEyebrow} />
@@ -1492,6 +1558,8 @@ function ArticlePage() {
         <h2>{copy.takeTable}</h2>
         <p>{ui.lessonPractice}</p>
       </div>
+      <AcademyMasterclass article={article} locale={locale}/>
+      <section className="lesson-sources"><span className="eyebrow">{locale==='de'?'Fachliche Quellen':locale==='fr'?'Sources techniques':locale==='es'?'Fuentes técnicas':'Technical sources'}</span><h2>{locale==='de'?'Weiterlesen und überprüfen':locale==='fr'?'Approfondir et vérifier':locale==='es'?'Profundizar y verificar':'Read further and verify'}</h2><p>{locale==='de'?'Die Lektion wurde entlang dieser Primär- und Fachquellen aufgebaut. Öffne sie, wenn du Definitionen, Verfahren oder Grenzwerte im Original prüfen möchtest.':locale==='fr'?'La leçon s’appuie sur ces sources primaires et techniques. Consultez-les pour vérifier définitions, pratiques et limites dans le texte original.':locale==='es'?'La lección se apoya en estas fuentes primarias y técnicas. Ábrelas para comprobar definiciones, prácticas y límites en el texto original.':'This lesson is structured around these primary and technical sources. Open them to verify definitions, practices and limits in their original context.'}</p><div>{article.sources.map(source=><a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label}<ArrowRight/></a>)}</div></section>
       <section className="lesson-connections"><span className="eyebrow">{ui.continueAtlas}</span><h2>{ui.seeIdea}</h2><div className="thread-cloud">{regions.filter(region=>article.relatedRegionIds.includes(region.id)).map(region=><ThreadLink key={region.id} to={`/regions/${region.id}`} tone="moss">{region.name}</ThreadLink>)}{grapes.filter(grape=>article.relatedGrapeIds.includes(grape.id)).map(grape=><ThreadLink key={grape.id} to={`/grapes/${grape.id}`}>{grape.name}</ThreadLink>)}</div></section>
       <div className="next-read">
         <span>{copy.continueLearning}</span>
@@ -1718,6 +1786,7 @@ function JourneyExperience({journey}:{journey:TastingJourney}) {
 function TastingRoom() {
   const {locale}=useLocale()
   const ui=useUiCopy()
+  const cellarAction={en:{add:'Add to my cellar',added:'In my cellar'},de:{add:'In meinen Keller legen',added:'In meinem Keller'},fr:{add:'Ajouter à ma cave',added:'Dans ma cave'},es:{add:'Añadir a mi bodega',added:'En mi bodega'}}[locale]
   const { id = "open-table" } = useParams();
   const journey=repository.journeys.all().find(item=>item.id===id)
   if(journey) return <JourneyExperience journey={journey}/>
@@ -1730,7 +1799,9 @@ function TastingRoom() {
     reflection: "",
   });
   const [saved, setSaved] = useState(false);
+  const [,setCellarVersion]=useState(0)
   const wine = tastingFlight[current];
+  const inCellar=repository.cellar.all().some(item=>item.wineId===wine.id)
   const shareUrl = `${window.location.origin}/tastings/${id}`;
   function saveNote() {
     const next: TastingNote = {
@@ -1746,7 +1817,19 @@ function TastingRoom() {
       createdAt: new Date().toISOString(),
     };
     repository.notes.save([...repository.notes.all(), next]);
+    const cellar=repository.cellar.all(),cellarItem=cellar.find(item=>item.wineId===wine.id)
+    if(cellarItem){
+      cellarItem.notes=[...(cellarItem.notes??[]),{id:next.id,appearance:next.appearance,aromaIds:next.aromaIds,palate:next.palate,finish:'',reflection:next.reflection,acidity:3,tannin:wine.style==='red'?3:1,body:3,rating:next.rating,createdAt:next.createdAt}]
+      cellarItem.rating=next.rating
+      repository.cellar.save(cellar)
+      setCellarVersion(value=>value+1)
+    }
     setSaved(true);
+  }
+  function addCurrentWine(){
+    const cellar=repository.cellar.all(),existing=cellar.find(item=>item.wineId===wine.id)
+    if(existing){existing.quantity+=1;existing.state='tasted'}else{cellar.push({id:crypto.randomUUID(),wineId:wine.id,state:'tasted',quantity:1,location:ui.homeCellar,vintage:wine.vintage??undefined,bottleSizeMl:750,notes:[]})}
+    repository.cellar.save(cellar);setCellarVersion(value=>value+1)
   }
   return (
     <div className="tasting-room">
@@ -1797,6 +1880,7 @@ function TastingRoom() {
                   </ThreadLink>
                 ))}
             </div>
+            <button className={inCellar?'secondary-button cellar-added':'secondary-button'} onClick={addCurrentWine}>{inCellar?<Check/>:<Plus/>}{inCellar?cellarAction.added:cellarAction.add}</button>
           </div>
         </section>
         <div className="note-steps">
@@ -2316,6 +2400,7 @@ function AdminPage() {
           <button className="primary-button">{t("create")}</button>
         </form>
       </section>
+      <BusinessAdminPanel />
       {items.length > 0 && (
         <section className="related-section">
           <h2>{ui.personalAdditions}</h2>

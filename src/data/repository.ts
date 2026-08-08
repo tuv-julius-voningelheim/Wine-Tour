@@ -1,7 +1,8 @@
-import type { CellarItem, TastingJourney, TastingNote, User } from '../types'
+import type { ApprovalRecord, BusinessWorkspace, CellarItem, MerchantOffer, PartnerProfile, PlatformFeeConfiguration, PromotionalPlacement, TastingEvent, TastingJourney, TastingNote, User, WineryPageSection, WorkspaceMembership } from '../types'
 
 const keys = {
-  users:'vine-atlas.users', session:'vine-atlas.session', cellar:'vine-atlas.cellar', notes:'vine-atlas.notes', ratings:'vine-atlas.ratings', additions:'vine-atlas.additions', journeys:'vine-atlas.journeys'
+  users:'vine-atlas.users', session:'vine-atlas.session', cellar:'vine-atlas.cellar', notes:'vine-atlas.notes', ratings:'vine-atlas.ratings', additions:'vine-atlas.additions', journeys:'vine-atlas.journeys',
+  workspaces:'vine-atlas.business.workspaces', memberships:'vine-atlas.business.memberships', partnerProfiles:'vine-atlas.business.partner-profiles', events:'vine-atlas.business.events', winerySections:'vine-atlas.business.winery-sections', offers:'vine-atlas.business.offers', placements:'vine-atlas.business.placements', approvals:'vine-atlas.business.approvals', feeConfiguration:'vine-atlas.business.fee-configuration'
 } as const
 
 function read<T>(key:string, fallback:T):T {
@@ -17,6 +18,15 @@ export const repository = {
   ratings: { all:()=>read<Record<string,number>>(keys.ratings,{}), save:(ratings:Record<string,number>)=>write(keys.ratings,ratings) },
   additions: { all:()=>read<Record<string,unknown>[]>(keys.additions,[]), save:(items:Record<string,unknown>[])=>write(keys.additions,items) },
   journeys: { all:()=>read<TastingJourney[]>(keys.journeys,[]), save:(items:TastingJourney[])=>write(keys.journeys,items) },
+  workspaces: { all:(fallback:BusinessWorkspace[]=[])=>read<BusinessWorkspace[]>(keys.workspaces,fallback), save:(items:BusinessWorkspace[])=>write(keys.workspaces,items) },
+  memberships: { all:(fallback:WorkspaceMembership[]=[])=>read<WorkspaceMembership[]>(keys.memberships,fallback), save:(items:WorkspaceMembership[])=>write(keys.memberships,items) },
+  partnerProfiles: { all:(fallback:PartnerProfile[]=[])=>read<PartnerProfile[]>(keys.partnerProfiles,fallback), save:(items:PartnerProfile[])=>write(keys.partnerProfiles,items) },
+  events: { all:(fallback:TastingEvent[]=[])=>read<TastingEvent[]>(keys.events,fallback), save:(items:TastingEvent[])=>write(keys.events,items) },
+  winerySections: { all:(fallback:WineryPageSection[]=[])=>read<WineryPageSection[]>(keys.winerySections,fallback), save:(items:WineryPageSection[])=>write(keys.winerySections,items) },
+  offers: { all:(fallback:MerchantOffer[]=[])=>read<MerchantOffer[]>(keys.offers,fallback), save:(items:MerchantOffer[])=>write(keys.offers,items) },
+  placements: { all:(fallback:PromotionalPlacement[]=[])=>read<PromotionalPlacement[]>(keys.placements,fallback), save:(items:PromotionalPlacement[])=>write(keys.placements,items) },
+  approvals: { all:(fallback:ApprovalRecord[]=[])=>read<ApprovalRecord[]>(keys.approvals,fallback), save:(items:ApprovalRecord[])=>write(keys.approvals,items) },
+  feeConfiguration: { get:(fallback:PlatformFeeConfiguration)=>read<PlatformFeeConfiguration>(keys.feeConfiguration,fallback), save:(item:PlatformFeeConfiguration)=>write(keys.feeConfiguration,item) },
 }
 
 export async function hashPassword(password:string,salt:string){
