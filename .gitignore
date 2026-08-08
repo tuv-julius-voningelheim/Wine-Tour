@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vercel/
+
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+
+docs/qa/
+*.auth-state.json
+
+.DS_Store
+Thumbs.db
+
