@@ -95,6 +95,7 @@ import { AcademyMasterclass, GrapeAmpelography, GrapeDeepDive, ProducerDecisionM
 import { InlineLearningChapter, LearningHub, LearningLesson, learningUi } from "./LearningSystem";
 import { learningBlockById, learningModuleById, learningModules } from "./learningCurriculum";
 import { DatabaseStatus } from "./DatabaseStatus";
+import { EditorialStudio } from "./EditorialStudio";
 
 function regionHeroFor(region:{country:string;climate:string;soil:string;lat:number}){
   const signal=`${region.country} ${region.climate} ${region.soil}`.toLowerCase()
@@ -108,6 +109,14 @@ function regionHeroFor(region:{country:string;climate:string;soil:string;lat:num
 const navItems = [
   { to: "/", key: "home" as const, icon: Compass, end: true },
   { to: "/atlas", key: "atlas" as const, icon: MapIcon },
+  { to: "/tastings", key: "tastings" as const, icon: Users },
+  { to: "/cellar", key: "cellar" as const, icon: Wine },
+  { to: "/profile", key: "profile" as const, icon: CircleUserRound },
+];
+
+const mobileNavItems = [
+  { to: "/atlas", key: "atlas" as const, icon: MapIcon },
+  { to: "/learn", key: "learn" as const, icon: Library },
   { to: "/tastings", key: "tastings" as const, icon: Users },
   { to: "/cellar", key: "cellar" as const, icon: Wine },
   { to: "/profile", key: "profile" as const, icon: CircleUserRound },
@@ -150,7 +159,9 @@ export default function App() {
 }
 
 function StudioGuard({children}:{children:ReactNode}){
-  const {user}=useAuth()
+  const {user,ready}=useAuth()
+  const ui=useUiCopy()
+  if(!ready)return <div className="page guarded" aria-busy="true" role="status" aria-label={ui.studioNav}><span className="loading-orbit"/></div>
   return user?.role==='admin'?children:<Navigate to="/profile" replace/>
 }
 
@@ -248,8 +259,8 @@ function AppShell({
       </header>
       <main className="main-content">{children}</main>
       <nav className="bottom-nav" aria-label={ui.primaryNavigation}>
-        {navItems.map(({ to, key, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end}>
+        {mobileNavItems.map(({ to, key, icon: Icon }) => (
+          <NavLink key={to} to={to}>
             <Icon size={21} />
             <span>{t(key)}</span>
           </NavLink>
@@ -1081,7 +1092,7 @@ function WineCard({ wine }: { wine: (typeof wines)[number] }) {
         <i />
       </div>
       <small>
-        {wine.vintage ?? ui.nonVintage} · {styleLabel(wine.style,locale)}
+        {wine.vintage ?? "—"} · {styleLabel(wine.style,locale)}
       </small>
       <h3>{wine.name}</h3>
       <p>{producer?.name}</p>
@@ -1141,7 +1152,7 @@ function WinePage() {
               ATLAS
             </span>
             <b>{wine.name}</b>
-            <small>{wine.vintage ?? ui.nonVintage}</small>
+            <small>{wine.vintage ?? "—"}</small>
           </div>
         </div>
         <div>
@@ -1188,7 +1199,7 @@ function WinePage() {
         <dl className="facts">
           <div>
             <dt>{ui.vintage}</dt>
-            <dd>{wine.vintage ?? ui.nonVintage}</dd>
+            <dd>{wine.vintage ?? "—"}</dd>
           </div>
           <div>
             <dt>{ui.style}</dt>
@@ -1722,7 +1733,7 @@ function chapterTypesFor(ui:ReturnType<typeof useUiCopy>,locale:Locale='en'):Arr
   {type:'host-note',label:ui.chapterHost,help:ui.chapterHostHelp}, {type:'pause',label:ui.chapterPause,help:ui.chapterPauseHelp},
 ]}
 function optionsForChapter(type:TastingChapterType,locale:Locale='en') {
-  if(type==='wine') return wines.map(item=>({id:item.id,label:`${item.name} · ${item.vintage ?? 'NV'}`}))
+  if(type==='wine') return wines.map(item=>({id:item.id,label:`${item.name}${item.vintage ? ` · ${item.vintage}` : ''}`}))
   if(type==='region') return regions.map(item=>({id:item.id,label:`${item.name} · ${countryLabel(item.country,locale)}`}))
   if(type==='producer') return producers.map(item=>({id:item.id,label:item.name}))
   if(type==='grape') return grapes.map(item=>({id:item.id,label:item.name}))
@@ -1919,7 +1930,7 @@ function TastingRoom() {
             <h1>{wine.name}</h1>
             <p>
               {producers.find((p) => p.id === wine.producerId)?.name} ·{" "}
-              {wine.vintage ?? ui.nonVintage}
+              {wine.vintage ?? "—"}
             </p>
             <div className="thread-cloud">
               {grapes
@@ -2126,7 +2137,7 @@ function CellarPage() {
                 </div>
                 <div>
                   <small>
-                    {(item.state==='wishlist'?ui.wishList:ui[item.state])} · {item.vintage || wine?.vintage || ui.nonVintage}
+                    {(item.state==='wishlist'?ui.wishList:ui[item.state])} · {item.vintage || wine?.vintage || "—"}
                   </small>
                   <h3>{wine?.name || item.customName}</h3>
                   <p>
@@ -2276,7 +2287,7 @@ function CellarForm({
             <select value={wineId} onChange={(e) => setWineId(e.target.value)}>
               {wines.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.name} · {w.vintage ?? "NV"}
+                  {w.name}{w.vintage ? ` · ${w.vintage}` : ""}
                 </option>
               ))}
             </select>
@@ -2331,12 +2342,9 @@ function CellarForm({
 
 function AdminPage() {
   const { user } = useAuth();
-  const { t,locale } = useLocale();
+  const { t } = useLocale();
   const ui=useUiCopy()
   const copy = usePageCopy();
-  const [type, setType] = useState("Region");
-  const [name, setName] = useState("");
-  const [items, setItems] = useState(() => repository.additions.all());
   if (user?.role !== "admin")
     return (
       <div className="page guarded">
@@ -2348,22 +2356,6 @@ function AdminPage() {
         </Link>
       </div>
     );
-  function add(e: FormEvent) {
-    e.preventDefault();
-    const next = [
-      ...items,
-      {
-        id: crypto.randomUUID(),
-        type,
-        name,
-        provenance: "Personal",
-        createdAt: new Date().toISOString(),
-      },
-    ];
-    repository.additions.save(next);
-    setItems(next);
-    setName("");
-  }
   return (
     <div className="page admin-page">
       <PageIntro eyebrow={copy.curatorWorkspace} title={copy.curatorWorkspace}>
@@ -2392,92 +2384,8 @@ function AdminPage() {
           <span>{t("wines")}</span>
         </div>
       </section>
-      <section className="admin-layout">
-        <div className="management-list">
-          <div className="section-heading">
-            <h2>{ui.recentRecords}</h2>
-            <button>
-              <Filter />
-              {ui.filter}
-            </button>
-          </div>
-          {regions.slice(0, 6).map((region) => (
-            <div key={region.id}>
-              <span className="record-icon">
-                <MapIcon />
-              </span>
-              <div>
-                <strong>{region.name}</strong>
-                <small>{countryLabel(region.country,locale)} · {ui.curated} · {ui.reviewed} {new Intl.DateTimeFormat(locale,{dateStyle:'medium'}).format(new Date())}</small>
-              </div>
-              <button aria-label={ui.settings}>
-                <Settings />
-              </button>
-            </div>
-          ))}
-        </div>
-        <form className="admin-form" onSubmit={add}>
-          <span className="eyebrow">{ui.newRecord}</span>
-          <h2>{ui.addAtlas}</h2>
-          <label>
-            {ui.recordType}
-            <select value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="Region">{ui.region}</option>
-              <option value="Grape">{ui.grape}</option>
-              <option value="Producer">{ui.producer}</option>
-              <option value="Wine">{ui.wine}</option>
-              <option value="Tasting">{ui.tasting}</option>
-            </select>
-          </label>
-          <label>
-            {ui.publishedName}
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={ui.publishedNamePlaceholder}
-            />
-          </label>
-          <label>
-            {ui.connectRegion}
-            <select>
-              <option>{ui.selectRegion}</option>
-              {regions.slice(0, 20).map((r) => (
-                <option key={r.id}>{r.name}</option>
-              ))}
-            </select>
-          </label>
-          <p>{ui.localRecordBody}</p>
-          <button className="primary-button">{t("create")}</button>
-        </form>
-      </section>
+      <EditorialStudio />
       <BusinessAdminPanel />
-      {items.length > 0 && (
-        <section className="related-section">
-          <h2>{ui.personalAdditions}</h2>
-          <div className="simple-list">
-            {items.map((item: any) => (
-              <div key={item.id}>
-                <Plus />
-                <span>
-                  {item.name} · {item.type}
-                </span>
-                <button aria-label={ui.remove}
-                  onClick={() => {
-                    const next = items.filter(
-                      (entry: any) => entry.id !== item.id,
-                    );
-                    setItems(next);
-                    repository.additions.save(next);
-                  }}
-                >
-                  <X />
-                </button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
@@ -2708,7 +2616,7 @@ function GlobalSearch({ onClose }: { onClose: () => void }) {
         .map((x) => ({
           type: ui.wine,
           name: x.name,
-          meta: `${x.vintage ?? ui.nonVintage} · ${styleLabel(x.style,locale)}`,
+          meta: `${x.vintage ?? "—"} · ${styleLabel(x.style,locale)}`,
           to: `/wines/${x.id}`,
         })),
       ...articles

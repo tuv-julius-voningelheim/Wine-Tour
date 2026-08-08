@@ -264,6 +264,7 @@ export interface WineryPageSection {
   type: 'hero' | 'story' | 'vineyards' | 'cellar' | 'visits' | 'team' | 'gallery' | 'wines' | 'contact'
   heading: string
   body: string
+  translations?: Partial<Record<'en' | 'de' | 'fr' | 'es', { heading: string; body: string }>>
   visible: boolean
   order: number
 }
