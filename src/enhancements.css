@@ -73,3 +73,83 @@
     border-bottom: 1px solid var(--line);
   }
 }
+
+.database-status {
+  display: grid;
+  gap: 16px;
+  margin: 0 0 28px;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: 5px 22px 22px 22px;
+  background: rgba(255,255,255,.38);
+}
+
+.database-status header {
+  display: grid;
+  grid-template-columns: 48px minmax(0,1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.database-status-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 15px;
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.database-status h2 {
+  margin: 3px 0 0;
+  font-size: clamp(24px,3vw,36px);
+}
+
+.database-status-state,
+.database-status button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.database-status-state svg,
+.database-status button svg { width: 16px; height: 16px; }
+.database-status.is-connected .database-status-state { color: #466348; }
+
+.database-status-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.database-status-counts span,
+.database-status-counts small,
+.database-status p { color: var(--muted); font-size: 11px; }
+
+.database-status button {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.database-status .is-spinning { animation: database-spin .9s linear infinite; }
+@keyframes database-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .database-status .is-spinning { animation: none; }
+}
+
+@media (max-width: 620px) {
+  .database-status header { grid-template-columns: 42px minmax(0,1fr); }
+  .database-status-icon { width: 42px; height: 42px; }
+  .database-status-state { grid-column: 1 / -1; }
+}

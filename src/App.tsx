@@ -7,6 +7,7 @@ import {
 } from "react";
 import {
   Link,
+  Navigate,
   NavLink,
   Route,
   Routes,
@@ -47,6 +48,7 @@ import {
   Minus,
   NotebookPen,
   Plus,
+  RotateCcw,
   Search,
   Settings,
   Share2,
@@ -90,6 +92,9 @@ import volcanicVineyard from "./assets/region-volcanic-vineyard.jpg";
 import { AtlasCommercialPlacements, BusinessAdminPanel, EventDetail, EventsMarketplace, FeaturedBusinessHome, HostProfile, PartnerProfilePage, ProducerBusinessLayer, StudioEvents, StudioHome, StudioOffers, StudioPlacements, StudioSite, WineMerchantOffers } from "./BusinessPlatform";
 import { CellarExperience } from "./CellarExperience";
 import { AcademyMasterclass, GrapeAmpelography, GrapeDeepDive, ProducerDecisionMap, RegionFieldGuide, WineEvolutionLesson } from "./LearningDepth";
+import { InlineLearningChapter, LearningHub, LearningLesson, learningUi } from "./LearningSystem";
+import { learningBlockById, learningModuleById, learningModules } from "./learningCurriculum";
+import { DatabaseStatus } from "./DatabaseStatus";
 
 function regionHeroFor(region:{country:string;climate:string;soil:string;lat:number}){
   const signal=`${region.country} ${region.climate} ${region.soil}`.toLowerCase()
@@ -120,8 +125,8 @@ export default function App() {
         <Route path="/wineries/:slug" element={<ProducerPage />} />
         <Route path="/wines/:slug" element={<WinePage />} />
         <Route path="/aromas" element={<AromaPage />} />
-        <Route path="/learn" element={<LearnPage />} />
-        <Route path="/learn/:slug" element={<ArticlePage />} />
+        <Route path="/learn" element={<LearningHub />} />
+        <Route path="/learn/:slug" element={<LearningLesson />} />
         <Route path="/tastings" element={<TastingsPage />} />
         <Route path="/tastings/build" element={<TastingBuilder />} />
         <Route path="/tastings/:id" element={<TastingRoom />} />
@@ -129,11 +134,11 @@ export default function App() {
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/hosts/:id" element={<HostProfile />} />
         <Route path="/partners/:id" element={<PartnerProfilePage />} />
-        <Route path="/studio" element={<StudioHome />} />
-        <Route path="/studio/events" element={<StudioEvents />} />
-        <Route path="/studio/site" element={<StudioSite />} />
-        <Route path="/studio/offers" element={<StudioOffers />} />
-        <Route path="/studio/placements" element={<StudioPlacements />} />
+        <Route path="/studio" element={<StudioGuard><StudioHome /></StudioGuard>} />
+        <Route path="/studio/events" element={<StudioGuard><StudioEvents /></StudioGuard>} />
+        <Route path="/studio/site" element={<StudioGuard><StudioSite /></StudioGuard>} />
+        <Route path="/studio/offers" element={<StudioGuard><StudioOffers /></StudioGuard>} />
+        <Route path="/studio/placements" element={<StudioGuard><StudioPlacements /></StudioGuard>} />
         <Route path="/cellar" element={<CellarExperience />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/profile" element={<ProfilePage />} />
@@ -144,6 +149,11 @@ export default function App() {
   );
 }
 
+function StudioGuard({children}:{children:ReactNode}){
+  const {user}=useAuth()
+  return user?.role==='admin'?children:<Navigate to="/profile" replace/>
+}
+
 function AppShell({
   children,
   onSearch,
@@ -152,6 +162,7 @@ function AppShell({
   onSearch: () => void;
 }) {
   const { t, locale, setLocale } = useLocale();
+  const {user}=useAuth()
   const ui=useUiCopy()
   const location = useLocation();
   useEffect(() => {
@@ -182,10 +193,14 @@ function AppShell({
             <Users size={20} />
             <span>{ui.eventsNav}</span>
           </NavLink>
-          <NavLink to="/studio">
+          {user?.role==='admin'&&<NavLink to="/studio">
             <Settings size={20} />
             <span>{ui.studioNav}</span>
-          </NavLink>
+          </NavLink>}
+          {user?.role==='admin'&&<NavLink to="/admin" className="admin-nav-entry">
+            <ShieldCheck size={20} />
+            <span>{t('admin')} · {ui.studioNav}</span>
+          </NavLink>}
           <NavLink to="/learn">
             <Library size={20} />
             <span>{t("learn")}</span>
@@ -1262,6 +1277,13 @@ function AromaPage() {
   const [intensity, setIntensity] = useState(1);
   const [family, setFamily] = useState(initialAroma.family);
   const [selected, setSelected] = useState<Aroma>(initialAroma);
+  const [lensNotice,setLensNotice]=useState('')
+  const lensCopy={
+    en:{help:'Start with a wine style and origin layer. Choose a family in the middle ring, then a precise aroma on the outer ring. Tab or use arrow keys to move.',reset:'Reset lens',family:'Family',subfamily:'Subfamily',aroma:'Aroma',note:'Add to tasting note',learn:'Add as tasting learning step',noteAdded:'Aroma saved for your next tasting note.',learnAdded:'Aroma calibration added to your tasting storyline.',confuse:'Compare before deciding',calibrate:'Calibration references',compareBody:'Smell these nearby references side by side; shared family cues can otherwise make the first confident word feel more precise than it is.'},
+    de:{help:'Beginne mit Weinstil und Herkunftsebene. Wähle eine Familie im mittleren Ring und dann ein präzises Aroma außen. Mit Tab oder Pfeiltasten navigieren.',reset:'Linse zurücksetzen',family:'Familie',subfamily:'Unterfamilie',aroma:'Aroma',note:'Zur Verkostungsnotiz',learn:'Als Lernschritt hinzufügen',noteAdded:'Aroma für deine nächste Verkostungsnotiz gespeichert.',learnAdded:'Aromakalibrierung zur Verkostungsreise hinzugefügt.',confuse:'Vor der Entscheidung vergleichen',calibrate:'Kalibrierungsreferenzen',compareBody:'Rieche diese nahen Referenzen nebeneinander. Gemeinsame Familienmerkmale können das erste sichere Wort präziser wirken lassen, als es ist.'},
+    fr:{help:'Commencez par le style et la couche d’origine. Choisissez une famille dans l’anneau central, puis un arôme précis à l’extérieur. Tabulation ou flèches pour naviguer.',reset:'Réinitialiser la lentille',family:'Famille',subfamily:'Sous-famille',aroma:'Arôme',note:'Ajouter à la note',learn:'Ajouter comme étape pédagogique',noteAdded:'Arôme conservé pour votre prochaine note.',learnAdded:'Calibration aromatique ajoutée au parcours de dégustation.',confuse:'Comparer avant de décider',calibrate:'Références de calibration',compareBody:'Sentez ces références proches côte à côte ; les points communs peuvent rendre le premier mot assuré plus précis qu’il ne l’est.'},
+    es:{help:'Empieza por estilo y capa de origen. Elige una familia en el anillo central y un aroma preciso en el exterior. Usa Tab o flechas para moverte.',reset:'Reiniciar lente',family:'Familia',subfamily:'Subfamilia',aroma:'Aroma',note:'Añadir a la nota',learn:'Añadir como paso de aprendizaje',noteAdded:'Aroma guardado para tu próxima nota.',learnAdded:'Calibración aromática añadida al recorrido de cata.',confuse:'Comparar antes de decidir',calibrate:'Referencias de calibración',compareBody:'Huele estas referencias cercanas una junto a otra; las señales compartidas pueden hacer que la primera palabra parezca más precisa de lo que es.'},
+  }[locale]
   const visibleFamilies = families.filter((f) =>
     aromas.some((a) => a.family === f && a.styles.includes(style) && a.tier === tier),
   );
@@ -1269,6 +1291,19 @@ function AromaPage() {
     (a) => a.family === family && a.styles.includes(style) && a.tier === tier,
   );
   const selectedContent=aromaContent(selected,locale)
+  const confusionPairs=aromas.filter(item=>item.id!==selected.id&&item.styles.includes(style)&&(item.subfamily===selected.subfamily||item.family===selected.family)).slice(0,3)
+  function chooseAroma(item:Aroma){setSelected(item);setIntensity(1);setLensNotice('')}
+  function resetLens(){selectStyle(initialStyle);setTier(initialAroma.tier);setFamily(initialAroma.family);chooseAroma(initialAroma)}
+  function moveWithArrows(event:React.KeyboardEvent<SVGPathElement>,items:Aroma[],current:Aroma){
+    if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return
+    event.preventDefault();const direction=event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:1,index=items.findIndex(item=>item.id===current.id),next=items[(index+direction+items.length)%items.length];if(next){chooseAroma(next);requestAnimationFrame(()=>document.querySelector<SVGPathElement>(`[data-aroma-id="${next.id}"]`)?.focus())}
+  }
+  function addAromaNote(){localStorage.setItem('vine-atlas-aroma-draft',JSON.stringify({aromaId:selected.id,intensity,updatedAt:new Date().toISOString()}));setLensNotice(lensCopy.noteAdded)}
+  function addAromaLearning(){
+    const module=learningModules.find(item=>item.id==='aroma-language')!,block=module.blocks.find(item=>item.kind==='sensory-lab')!,journeys=repository.journeys.all(),target=journeys[0]??{id:crypto.randomUUID(),title:learningUi[locale].newJourney,description:module.question[locale],pace:'host' as const,access:'invite' as const,chapters:[],updatedAt:new Date().toISOString()}
+    const chapter:TastingChapter={id:crypto.randomUUID(),type:'learning-block',referenceId:block.id,title:`${block.title[locale]} · ${selectedContent.name}`,hostNote:`${selectedContent.family} → ${selectedContent.subfamily} → ${selectedContent.name}: ${selectedContent.reference}`,duration:block.duration}
+    const updated={...target,chapters:[...target.chapters,chapter],updatedAt:new Date().toISOString()};repository.journeys.save([updated,...journeys.filter(item=>item.id!==updated.id)]);setLensNotice(lensCopy.learnAdded)
+  }
   function selectStyle(nextStyle: WineStyle) {
     const nextTier=aromas.some(a=>a.styles.includes(nextStyle)&&a.tier===tier)?tier:'primary'
     const nextFamily =
@@ -1318,6 +1353,7 @@ function AromaPage() {
       <div className="aroma-tier-tabs" aria-label={ui.aromaOriginLayer}>
         {(["primary","secondary","tertiary"] as const).map((item)=><button key={item} disabled={!aromas.some(a=>a.tier===item&&a.styles.includes(style))} className={tier===item?'active':''} onClick={()=>selectTier(item)}><span>{item==='primary'?'01':item==='secondary'?'02':'03'}</span><strong>{ui[item]}</strong><small>{item==='primary'?ui.primaryHelp:item==='secondary'?ui.secondaryHelp:ui.tertiaryHelp}</small></button>)}
       </div>
+      <div className="aroma-guidebar"><div className="aroma-breadcrumb"><span>{lensCopy.family}</span><button onClick={()=>setFamily(selected.family)}>{selectedContent.family}</button><ChevronRight/><span>{lensCopy.subfamily}</span><button>{selectedContent.subfamily}</button><ChevronRight/><span>{lensCopy.aroma}</span><strong>{selectedContent.name}</strong></div><p><Compass size={16}/>{lensCopy.help}</p><button className="aroma-reset" onClick={resetLens}><RotateCcw size={15}/>{lensCopy.reset}</button></div>
       <section className="wheel-layout">
         <div className="wheel-wrap">
           <svg
@@ -1359,6 +1395,9 @@ function AromaPage() {
                       );
                       if (first) setSelected(first);
                     }
+                    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){
+                      event.preventDefault();const direction=event.key==='ArrowLeft'||event.key==='ArrowUp'?-1:1,next=visibleFamilies[(index+direction+visibleFamilies.length)%visibleFamilies.length];setFamily(next);const first=aromas.find(a=>a.family===next&&a.styles.includes(style)&&a.tier===tier);if(first)chooseAroma(first)
+                    }
                   }}
                 />
               );
@@ -1366,7 +1405,7 @@ function AromaPage() {
             {visibleAromas.map((item,index)=>{
               const angle=360/visibleAromas.length
               const itemContent=aromaContent(item,locale)
-              return <path key={item.id} role="button" tabIndex={0} aria-label={`${itemContent.subfamily}: ${itemContent.name}`} className={`descriptor-segment ${selected.id===item.id?'selected':''}`} d={donutPath(260,260,204,248,index*angle+1,(index+1)*angle-1)} onClick={()=>{setSelected(item);setIntensity(1)}} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();setSelected(item);setIntensity(1)}}}/>
+              return <path key={item.id} data-aroma-id={item.id} role="button" tabIndex={0} aria-current={selected.id===item.id?'true':undefined} aria-label={`${itemContent.subfamily}: ${itemContent.name}`} className={`descriptor-segment ${selected.id===item.id?'selected':''}`} d={donutPath(260,260,204,248,index*angle+1,(index+1)*angle-1)} onClick={()=>chooseAroma(item)} onKeyDown={(event)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();chooseAroma(item)}moveWithArrows(event,visibleAromas,item)}}/>
             })}
             <circle cx="260" cy="260" r="82" />
             <text x="260" y="248" data-testid="active-aroma-style">
@@ -1410,13 +1449,16 @@ function AromaPage() {
             {visibleAromas.map((a) => (
               <button
                 className={selected.id === a.id ? "active" : ""}
-                onClick={() => setSelected(a)}
+                onClick={() => chooseAroma(a)}
                 key={a.id}
               >
                 {aromaContent(a,locale).name}
               </button>
             ))}
           </div>
+          <div className="aroma-learning-actions"><button className="primary-button ink" onClick={addAromaNote}><NotebookPen size={16}/>{lensCopy.note}</button><button className="secondary-button" onClick={addAromaLearning}><Layers3 size={16}/>{lensCopy.learn}</button></div>
+          {lensNotice&&<p className="aroma-notice" role="status"><Check size={15}/>{lensNotice}</p>}
+          <section className="aroma-confusion"><span className="eyebrow">{lensCopy.confuse}</span><p>{lensCopy.compareBody}</p><div>{confusionPairs.map(item=><button key={item.id} onClick={()=>chooseAroma(item)}><span>{aromaContent(item,locale).subfamily}</span><strong>{aromaContent(item,locale).name}</strong><small>{aromaContent(item,locale).reference}</small></button>)}</div></section>
           <h3>{copy.followNote}</h3>
           <div className="thread-cloud">
             {grapes
@@ -1672,10 +1714,11 @@ function TastingsPage() {
   );
 }
 
-function chapterTypesFor(ui:ReturnType<typeof useUiCopy>):Array<{type:TastingChapterType;label:string;help:string}> {return [
+function chapterTypesFor(ui:ReturnType<typeof useUiCopy>,locale:Locale='en'):Array<{type:TastingChapterType;label:string;help:string}> {return [
   {type:'wine',label:ui.chapterWine,help:ui.chapterWineHelp}, {type:'region',label:ui.chapterRegion,help:ui.chapterRegionHelp},
   {type:'producer',label:ui.chapterProducer,help:ui.chapterProducerHelp}, {type:'grape',label:ui.chapterGrape,help:ui.chapterGrapeHelp},
   {type:'aroma',label:ui.chapterAroma,help:ui.chapterAromaHelp}, {type:'article',label:ui.chapterLesson,help:ui.chapterLessonHelp},
+  {type:'learning-block',label:{en:'Learning block',de:'Lernblock',fr:'Bloc pédagogique',es:'Bloque de aprendizaje'}[locale],help:learningUi[locale].tastingBody},
   {type:'host-note',label:ui.chapterHost,help:ui.chapterHostHelp}, {type:'pause',label:ui.chapterPause,help:ui.chapterPauseHelp},
 ]}
 function optionsForChapter(type:TastingChapterType,locale:Locale='en') {
@@ -1684,11 +1727,13 @@ function optionsForChapter(type:TastingChapterType,locale:Locale='en') {
   if(type==='producer') return producers.map(item=>({id:item.id,label:item.name}))
   if(type==='grape') return grapes.map(item=>({id:item.id,label:item.name}))
   if(type==='aroma') return aromas.map(item=>{const content=aromaContent(item,locale);return {id:item.id,label:`${content.family} · ${content.name}`}})
-  if(type==='article') return articles.map(item=>({id:item.id,label:articleContent(item,locale).title}))
+  if(type==='article') return [...learningModules.map(item=>({id:item.id,label:`${learningUi[locale].addWhole} · ${item.title[locale]}`})),...articles.map(item=>({id:item.id,label:articleContent(item,locale).title}))]
+  if(type==='learning-block') return learningModules.flatMap(module=>module.blocks.filter(block=>!['sources','glossary','entity-connections'].includes(block.kind)).map(block=>({id:block.id,label:`${module.title[locale]} · ${block.title[locale]}`})))
   return []
 }
 function referenceTitle(type:TastingChapterType,id:string|undefined,locale:Locale,ui:ReturnType<typeof useUiCopy>) {
   if(!id) return type==='pause'?ui.pauseConversation:ui.chapterHost
+  if(type==='article'){const module=learningModuleById(id);if(module)return module.title[locale]}
   return optionsForChapter(type,locale).find(item=>item.id===id)?.label.split(' · ')[0] ?? ui.untitledChapter
 }
 function defaultJourney(locale:Locale,ui:ReturnType<typeof useUiCopy>):TastingJourney {
@@ -1705,15 +1750,16 @@ function defaultJourney(locale:Locale,ui:ReturnType<typeof useUiCopy>):TastingJo
 function TastingBuilder() {
   const {locale}=useLocale()
   const ui=useUiCopy()
-  const chapterTypes=chapterTypesFor(ui)
+  const chapterTypes=chapterTypesFor(ui,locale)
   const navigate=useNavigate()
-  const [journey,setJourney]=useState<TastingJourney>(()=>defaultJourney(locale,ui))
+  const [journey,setJourney]=useState<TastingJourney>(()=>repository.journeys.all()[0]??defaultJourney(locale,ui))
   const [type,setType]=useState<TastingChapterType>('wine')
   const [referenceId,setReferenceId]=useState(()=>optionsForChapter('wine')[0]?.id ?? '')
   const [note,setNote]=useState('')
   const [duration,setDuration]=useState(7)
   const [saved,setSaved]=useState(false)
   const options=optionsForChapter(type,locale)
+  const chapterCountLabel=journey.chapters.length===1?{en:'chapter',de:'Kapitel',fr:'chapitre',es:'capítulo'}[locale]:ui.chapters
   function chooseType(next:TastingChapterType){setType(next);setReferenceId(optionsForChapter(next,locale)[0]?.id ?? '');setNote('')}
   function addChapter(){
     const title=referenceTitle(type,referenceId,locale,ui)
@@ -1742,7 +1788,7 @@ function TastingBuilder() {
         <button className="primary-button" onClick={addChapter}><Plus/>{ui.addStoryline}</button>
       </section>
       <section className="storyline-editor">
-        <div className="section-heading"><div><span className="eyebrow">{ui.storyline}</span><h2>{journey.chapters.length} {ui.chapters} · {journey.chapters.reduce((sum,item)=>sum+item.duration,0)} {ui.minuteShort}</h2></div></div>
+        <div className="section-heading"><div><span className="eyebrow">{ui.storyline}</span><h2>{journey.chapters.length} {chapterCountLabel} · {journey.chapters.reduce((sum,item)=>sum+item.duration,0)} {ui.minuteShort}</h2></div></div>
         <div className="storyline-list">{journey.chapters.map((chapter,index)=><article key={chapter.id}>
           <GripVertical className="drag-hint"/><span className="chapter-number">{String(index+1).padStart(2,'0')}</span>
           <div><small>{chapterTypes.find(item=>item.type===chapter.type)?.label} · {chapter.duration} {ui.minuteShort}</small><h3>{chapter.title}</h3>{chapter.hostNote&&<p>{chapter.hostNote}</p>}</div>
@@ -1757,7 +1803,7 @@ function TastingBuilder() {
 function JourneyExperience({journey}:{journey:TastingJourney}) {
   const {locale}=useLocale()
   const ui=useUiCopy()
-  const chapterTypes=chapterTypesFor(ui)
+  const chapterTypes=chapterTypesFor(ui,locale)
   const [current,setCurrent]=useState(0);const chapter=journey.chapters[current]
   const wine=chapter?.type==='wine'?wines.find(item=>item.id===chapter.referenceId):undefined
   const region=chapter?.type==='region'?regions.find(item=>item.id===chapter.referenceId):undefined
@@ -1765,8 +1811,10 @@ function JourneyExperience({journey}:{journey:TastingJourney}) {
   const grape=chapter?.type==='grape'?grapes.find(item=>item.id===chapter.referenceId):undefined
   const aroma=chapter?.type==='aroma'?aromas.find(item=>item.id===chapter.referenceId):undefined
   const article=chapter?.type==='article'?articles.find(item=>item.id===chapter.referenceId):undefined
-  const link=wine?`/wines/${wine.id}`:region?`/regions/${region.id}`:producer?`/wineries/${producer.id}`:grape?`/grapes/${grape.id}`:aroma?`/aromas?selected=${aroma.id}`:article?`/learn/${article.id}`:null
-  const body=wine?wineContent(wine,producers.find(item=>item.id===wine.producerId)!,regions.find(item=>item.id===wine.regionId)!,locale).summary:region?regionContent(region,locale).summary:producer?producerContent(producer,regions.find(item=>item.id===producer.regionId)!,locale).summary:grape?grapeContent(grape,locale).summary:aroma?aromaContent(aroma,locale).reference:article?articleContent(article,locale).summary:chapter?.hostNote??ui.quietMoment
+  const lessonModule=chapter?.type==='article'?learningModuleById(chapter.referenceId??''):undefined
+  const learning=chapter?.type==='learning-block'?learningBlockById(chapter.referenceId??''):undefined
+  const link=wine?`/wines/${wine.id}`:region?`/regions/${region.id}`:producer?`/wineries/${producer.id}`:grape?`/grapes/${grape.id}`:aroma?`/aromas?selected=${aroma.id}`:article?`/learn/${article.id}`:lessonModule?`/learn/${lessonModule.id}`:learning?`/learn/${learning.module.id}`:null
+  const body=wine?wineContent(wine,producers.find(item=>item.id===wine.producerId)!,regions.find(item=>item.id===wine.regionId)!,locale).summary:region?regionContent(region,locale).summary:producer?producerContent(producer,regions.find(item=>item.id===producer.regionId)!,locale).summary:grape?grapeContent(grape,locale).summary:aroma?aromaContent(aroma,locale).reference:article?articleContent(article,locale).summary:lessonModule?lessonModule.question[locale]:learning?learning.module.question[locale]:chapter?.hostNote??ui.quietMoment
   return <div className="journey-room">
     <header><Link to="/tastings"><X/></Link><div><small>{journey.pace==='host'?ui.hostLearningJourney:ui.selfLearningJourney}</small><strong>{journey.title}</strong></div><span>{current+1} / {journey.chapters.length}</span></header>
     <aside>{journey.chapters.map((item,index)=><button key={item.id} className={index===current?'active':index<current?'done':''} onClick={()=>setCurrent(index)}><span>{index<current?<Check/>:String(index+1).padStart(2,'0')}</span><div><small>{chapterTypes.find(type=>type.type===item.type)?.label}</small><strong>{item.title}</strong></div><em>{item.duration}m</em></button>)}</aside>
@@ -1777,6 +1825,8 @@ function JourneyExperience({journey}:{journey:TastingJourney}) {
       {grape&&<div className="journey-facts"><article><span>{ui.growing}</span><p>{grapeContent(grape,locale).ripening}</p></article><article><span>{ui.cellarLabel}</span><p>{grapeContent(grape,locale).winemaking}</p></article></div>}
       {aroma&&<div className="journey-aroma"><span>{aromaContent(aroma,locale).family} · {aromaContent(aroma,locale).subfamily}</span><strong>{aromaContent(aroma,locale).name}</strong><p>{aromaContent(aroma,locale).origin}</p></div>}
       {article&&<ol className="journey-objectives">{articleContent(article,locale).objectives.map(item=><li key={item}>{item}</li>)}</ol>}
+      {lessonModule&&<InlineLearningChapter referenceId={lessonModule.id}/>}
+      {learning&&<InlineLearningChapter referenceId={learning.block.id}/>}
       {link&&<Link to={link} className="text-link">{ui.openComplete} <ArrowRight size={15}/></Link>}
       <div className="journey-navigation"><button className="secondary-button" disabled={current===0} onClick={()=>setCurrent(current-1)}><ArrowLeft/>{ui.previous}</button><div><small>{ui.upNext}</small><strong>{journey.chapters[current+1]?.title??ui.journeyComplete}</strong></div><button className="primary-button" disabled={current===journey.chapters.length-1} onClick={()=>setCurrent(current+1)}>{ui.nextChapter}<ArrowRight/></button></div>
     </main>
@@ -2319,6 +2369,7 @@ function AdminPage() {
       <PageIntro eyebrow={copy.curatorWorkspace} title={copy.curatorWorkspace}>
         <p>{copy.curatorBody}</p>
       </PageIntro>
+      <DatabaseStatus />
       <section className="admin-counts">
         <div>
           <MapIcon />

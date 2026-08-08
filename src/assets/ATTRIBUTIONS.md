@@ -20,4 +20,16 @@ The image assets were created specifically for Vine Atlas with OpenAI image gene
 
 The application imports web-optimised JPEG derivatives of all generated imagery. The first five original PNG masters remain in the repository for future art direction; the newer generated masters remain in the local image-generation output store.
 
+## Interactive field-academy plates
+
+The following PNG assets were generated with the built-in OpenAI image-generation tool on 2026-08-08. They form an original gouache, graphite and technical-ink field-atlas family. All labels and interactive markers are rendered in HTML so the artwork remains language-neutral and accessible.
+
+- `learning-perception-anatomy.png` — original orthonasal/retronasal perception plate. Prompt: side-profile head anatomy, nasal and oral cavities, olfactory pathway and wine glass on bone archival paper; burgundy and gold airflow paths; no text, brands or proprietary tasting diagram.
+- `learning-vine-ripeness.png` — original canopy and berry-development plate. Prompt: sloped vine row, sun path, wind, shade/exposure and five berry cross-sections from green growth through véraison and ripeness; no text or cultivar claim.
+- `learning-vessels-methods.png` — original cellar vessel and method plate. Prompt: cutaways of stainless steel, oak, concrete and clay vessels plus a language-neutral production branch toward still, sparkling, sweet and fortified wine; no producer or quality claim.
+- `learning-sensory-pairing.png` — original faults-diagnosis and pairing-balance plate. Prompt: sensory reference bench for oxidation, reduction, cork taint, volatile acidity, light exposure and clean control beside a top-down acid, salt, fat, heat, sweetness and umami balance study; no text or branded objects.
+
+These works use no external stock photography and were not copied from Wine Folly or another publisher. They are educational orientation plates, not analytical measurements, legal maps or diagnostic substitutes.
+The corresponding `.jpg` files are web-optimised derivatives used by the application; the PNG files remain the generated masters.
+
 Map tiles are provided at runtime by OpenStreetMap and retain visible on-map attribution.

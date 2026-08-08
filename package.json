@@ -5,13 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "typecheck": "tsc -b --pretty false"
+    "build": "tsc -b && tsc -p tsconfig.server.json --pretty false && npm run validate:learning && vite build",
+    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.server.json --pretty false",
+    "validate:learning": "node scripts/validate-learning.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:seed": "tsx scripts/seed-database.ts",
+    "db:check": "tsx scripts/check-database.ts"
   },
   "dependencies": {
+    "@vercel/functions": "^3.9.1",
     "@vitejs/plugin-react": "latest",
+    "drizzle-orm": "^0.45.2",
     "leaflet": "latest",
     "lucide-react": "latest",
+    "pg": "^8.22.0",
     "qrcode.react": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -20,8 +28,12 @@
   },
   "devDependencies": {
     "@types/leaflet": "latest",
+    "@types/node": "^26.2.0",
+    "@types/pg": "^8.21.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.11",
     "typescript": "latest",
     "vite": "latest"
   }

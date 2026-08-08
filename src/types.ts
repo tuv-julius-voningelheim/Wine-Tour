@@ -148,7 +148,7 @@ export interface CellarTastingNote {
   createdAt: string
 }
 
-export type TastingChapterType = 'wine' | 'region' | 'producer' | 'grape' | 'aroma' | 'article' | 'host-note' | 'pause'
+export type TastingChapterType = 'wine' | 'region' | 'producer' | 'grape' | 'aroma' | 'article' | 'learning-block' | 'host-note' | 'pause'
 
 export interface TastingChapter {
   id: string

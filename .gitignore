@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .vercel/
+.agents/
+skills-lock.json
 
 *.tsbuildinfo
 .env
@@ -12,4 +14,3 @@ docs/qa/
 
 .DS_Store
 Thumbs.db
-
