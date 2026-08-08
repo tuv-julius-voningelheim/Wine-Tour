@@ -26,10 +26,8 @@ async function readCount(kind: Kind) {
   return database.select({ value: count() }).from(academyLessons)
 }
 
-export default async function handler(request: Request) {
-  if (request.method !== 'GET') return Response.json({ error: 'Method not allowed' }, { status: 405 })
-
-  const url = new URL(request.url)
+export async function GET(request: Request) {
+  const url = new URL(request.url, 'https://wine-tour.vercel.app')
   const requestedKind = url.searchParams.get('kind') ?? 'regions'
   if (!allowedKinds.includes(requestedKind as Kind)) {
     return Response.json({ error: 'Unknown catalog kind', allowedKinds }, { status: 400 })
