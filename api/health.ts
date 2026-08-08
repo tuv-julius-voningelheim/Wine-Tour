@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm'
-import { appMeta, catalogSnapshots } from '../db/schema'
-import { database } from '../server/db'
+import { appMeta, catalogSnapshots } from '../db/schema.js'
+import { database } from '../server/db.js'
 
 const headers = { 'Cache-Control': 'no-store' }
 

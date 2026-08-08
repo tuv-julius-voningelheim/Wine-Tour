@@ -1,6 +1,6 @@
 import { asc, count } from 'drizzle-orm'
-import { academyLessons, aromas, grapes, producers, regions, wines } from '../db/schema'
-import { database } from '../server/db'
+import { academyLessons, aromas, grapes, producers, regions, wines } from '../db/schema.js'
+import { database } from '../server/db.js'
 
 const cacheHeaders = { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' }
 const allowedKinds = ['regions', 'grapes', 'producers', 'wines', 'aromas', 'lessons'] as const
